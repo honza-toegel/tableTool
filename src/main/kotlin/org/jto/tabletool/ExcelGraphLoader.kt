@@ -1,0 +1,130 @@
+package org.jto.tabletool
+
+import org.apache.poi.ss.usermodel.*
+import org.apache.poi.xssf.usermodel.XSSFColor
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
+import org.apache.tinkerpop.gremlin.structure.Vertex
+import org.slf4j.LoggerFactory.getLogger
+import java.io.File
+
+
+
+class ExcelGraphLoader(
+    val inputFileName: String,
+    val graphTraversal: GraphTraversalSource)
+{
+
+    companion object {
+        @Suppress("JAVA_CLASS_ON_COMPANION")
+        @JvmStatic
+        private val logger = getLogger(javaClass.enclosingClass)
+    }
+
+    fun graphLoadTest() {
+        logger.info("Loading input excel $inputFileName into graph")
+        val workbook: Workbook = WorkbookFactory.create(File(inputFileName))
+        for (sheet: Sheet in workbook.filter { it.sheetName.startsWith("~") }) {
+            logger.info("Loading sheet: ${sheet.sheetName}")
+            loadVertexFromSheet(sheet, graphTraversal)
+        }
+    }
+
+    private fun loadVertexHeaderFromSheet(sheet: Sheet): VertexSheetHeader {
+
+        fun getHeaderCellFunction(vertexCell: Cell, edgeCell: Cell): CellColorRelationType {
+            val rgbColor = (vertexCell.cellStyle.fillBackgroundColorColor as XSSFColor).argbHex
+            require(rgbColor == (edgeCell.cellStyle.fillBackgroundColorColor as XSSFColor).argbHex)
+            { "The header cell in row 1 must have same collor as header cell in row 2, to express consistent function" }
+            return when (rgbColor.substring(2)) {
+                "FFE599" -> CellColorRelationType.InRelation
+                "A4C2F4" -> CellColorRelationType.Main
+                "F4CCCC" -> CellColorRelationType.OutRelation
+                else -> error("Not allowed header color ${rgbColor}, allowed FFE599 (In), A4C2F4 (Main), F4CCCC (Out)")
+            }
+        }
+
+        val vertexHeaderRow =
+            requireNotNull(sheet.getRow(0)) { "The first header row is mandatory, cant be empty, sheet:${sheet.sheetName}" }
+        val edgeHeaderRow =
+            requireNotNull(sheet.getRow(1)) { "The second header row is mandatory, cant be empty, sheet:${sheet.sheetName}" }
+
+        val headerVertexes: List<HeaderVertex> = (vertexHeaderRow zip edgeHeaderRow).map {
+            when (getHeaderCellFunction(it.first, it.second)) {
+                CellColorRelationType.Main -> MainHeaderVertex(it.first.columnIndex, it.first.getCellStringValue())
+                CellColorRelationType.InRelation -> RelatedHeaderVertex(
+                    it.first.columnIndex,
+                    it.first.getCellStringValue(),
+                    it.second.getCellStringValue(),
+                    VertexRelationType.InRelation
+                )
+                CellColorRelationType.OutRelation -> RelatedHeaderVertex(
+                    it.first.columnIndex,
+                    it.first.getCellStringValue(),
+                    it.second.getCellStringValue(),
+                    VertexRelationType.OutRelation
+                )
+            }
+        }
+
+        val mainVertexInfo = requireNotNull(
+            headerVertexes.filterIsInstance<MainHeaderVertex>().singleOrNull()
+        ) { "Exactly one main vertex column is required, ${headerVertexes.filterIsInstance<MainHeaderVertex>()} provided" }
+        val relatedVertexInfos = headerVertexes.filterIsInstance<RelatedHeaderVertex>()
+
+        logger.info("$mainVertexInfo".replaceNewLines())
+        logger.info("Related vertexes: $relatedVertexInfos".replaceNewLines())
+
+        return VertexSheetHeader(mainVertexInfo, relatedVertexInfos)
+    }
+
+    private fun loadVertexFromSheet(sheet: Sheet, g: GraphTraversalSource) {
+        with(loadVertexHeaderFromSheet(sheet)) {
+
+            for (row: Row in sheet.drop(2)) {
+                logger.info(row.joinToString(" | ", "| ", " |") { it.getCellStringValue().replaceNewLines() })
+
+                val mainVertexName = row.getCellStringValue( mainVertexInfo.colIndex)
+                val mainVertex = searchOrCreateNamedVertex(g, mainVertexInfo.labels, mainVertexName)
+                relatedVertexInfos.forEach { relatedVertexInfo ->
+                    val relatedVertexNames = row.getCellStringValue(relatedVertexInfo.colIndex)
+                    if (!relatedVertexNames.isBlank()) {
+                        //Related cells can have one or more values split by newline or coma (coma can be escaped by \,)
+                        for (relatedVertexName in relatedVertexNames.split("(?<!\\\\)[;\\n]".toRegex())
+                            .map { it.replace("\\;", ";") }) {
+                            val relatedVertex = searchOrCreateNamedVertex(g, relatedVertexInfo.labels, relatedVertexName)
+                            when (relatedVertexInfo.relationType) {
+                                VertexRelationType.InRelation ->
+                                    g.addE(relatedVertexInfo.edgeLabel).from(relatedVertex).to(mainVertex).iterate()
+                                VertexRelationType.OutRelation ->
+                                    g.addE(relatedVertexInfo.edgeLabel).from(mainVertex).to(relatedVertex).iterate()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun searchOrCreateNamedVertex(g: GraphTraversalSource, defaultVertexLabels: List<VertexLabel>, vertexLabelName: String): Vertex {
+        val vertexNameMatch = requireNotNull("((\\w+):)?(.*)$".toRegex().find(vertexLabelName))
+            {"Vertex name: '$vertexLabelName' doesn't adhere regexp '((\\w+):)?.*\\$'"}
+        val vertexLabel = vertexNameMatch.destructured.component2() //Optional label
+        val vertexName = vertexNameMatch.destructured.component3().replace("\\:", ":")
+        val vertexLabels = defaultVertexLabels.filter {
+            when (vertexLabel.isNotBlank()) {
+                true -> it.alias == vertexLabel || it.label == vertexLabel
+                false -> true
+            }
+        }
+        require(vertexLabels.isNotEmpty()) {"No vertex labels left in order to search/create vertex after filtering by '$vertexLabel', extracted from: '$vertexLabelName'. Check the list of defined labels $defaultVertexLabels with the given name: '$vertexLabelName'"}
+        vertexLabels.forEach {
+            val existingVertex = g.V().hasLabel(it.label).has("name", vertexName)
+            if (existingVertex.hasNext())
+                return existingVertex.next()
+        }
+        val singleVertexLabel = requireNotNull(vertexLabels.singleOrNull())
+            {"Please use one of the vertex labels $vertexLabels as prefix before actual vertex name '$vertexLabelName' in order to create new vertex. If you like to re-use existing vertex, check the vertex label/name '$vertexLabelName' because it was not found"}.label
+        return g.addV(singleVertexLabel).property("name", vertexName).next()
+    }
+
+}
