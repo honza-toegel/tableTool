@@ -40,6 +40,9 @@ class GraphQueryTableLoader(val g: GraphTraversalSource) {
             )
             .select<String>("receiverServerGroup").`as`("receiverServerGroup")
 
+            //Receiver server
+            .coalesce(As<String>("receiverServerGroup").out("hasServer"), g.V(notAvailable.id())).`as`("receiverServer")
+
             //Sender server group
             .match<String>(
                 As<String>("senderComponent").coalesce(out("deployedOn"), g.V(notAvailable.id()))
@@ -47,6 +50,9 @@ class GraphQueryTableLoader(val g: GraphTraversalSource) {
                 As<String>("senderServerGroup").coalesce(out("restrictedManEnv"), g.V(notAvailable.id()))
                     .or(where<String>(P.eq("senderManEnv")), hasLabel<String>("notAvailable"))
             ).select<String>("senderServerGroup").`as`("senderServerGroup")
+
+            //Sender server
+            .coalesce(As<String>("senderServerGroup").out("hasServer"), g.V(notAvailable.id())).`as`("senderServer")
 
             //Select a postScript by priority, restrict by given restrictions
             .coalesce(
@@ -100,9 +106,9 @@ class GraphQueryTableLoader(val g: GraphTraversalSource) {
                 g.V(notAvailable.id())
             ).`as`("postScriptParams")
 
-            //Select a postScriptParams by priority, restrict by given restrictions
+            //Select a receiverDirectory by priority, restrict by given restrictions
             .coalesce(
-                //First priority is postScriptParams related to mftType
+                //First priority is receiverDirectory related to mftType
                 match<String, Vertex>(
                     As<String>("mftType").`out`("hasReceiverDirectory").`as`("receiverDirectory"),
                     As<String>("receiverDirectory").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
@@ -112,7 +118,7 @@ class GraphQueryTableLoader(val g: GraphTraversalSource) {
                     As<String>("receiverDirectory").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
                         .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
                 ).select("receiverDirectory"),
-                //Second priority is postScriptParams related to receiverComponent which can be restricted to mandator/environment/serverGroup
+                //Second priority is receiverDirectory related to receiverComponent which can be restricted to mandator/environment/serverGroup
                 match<String, Vertex>(
                     As<String>("receiverComponent").`out`("hasReceiverDirectory").`as`("receiverDirectory"),
                     As<String>("receiverDirectory").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
@@ -126,6 +132,38 @@ class GraphQueryTableLoader(val g: GraphTraversalSource) {
                 g.V(notAvailable.id())
             ).`as`("receiverDirectory")
 
+            //Select a receiverUID by priority, restrict by given restrictions
+            .coalesce(
+                //receiverUID related to receiverComponent which can be restricted to mandator/environment/serverGroup
+                match<String, Vertex>(
+                    As<String>("receiverComponent").`out`("hasUID").`as`("receiverUID"),
+                    As<String>("receiverUID").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
+                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
+                    As<String>("receiverUID").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
+                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
+                    As<String>("receiverUID").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
+                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
+                ).select("receiverUID"),
+                //No postscript defined
+                g.V(notAvailable.id())
+            ).`as`("receiverUID")
+
+            //Select a senderUID by priority, restrict by given restrictions
+            .coalesce(
+                //senderUID related to receiverComponent which can be restricted to mandator/environment/serverGroup
+                match<String, Vertex>(
+                    As<String>("senderComponent").`out`("hasUID").`as`("senderUID"),
+                    As<String>("senderUID").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
+                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
+                    As<String>("senderUID").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
+                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
+                    As<String>("senderUID").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
+                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
+                ).select("senderUID"),
+                //No postscript defined
+                g.V(notAvailable.id())
+            ).`as`("senderUID")
+
             //Result columns
             .select<String>(
                 "mftType",
@@ -134,13 +172,17 @@ class GraphQueryTableLoader(val g: GraphTraversalSource) {
                 "senderMandator",
                 "senderEnvironment",
                 "senderServerGroup",
+                "senderServer",
+                "senderUID",
                 "receiverComponent",
                 "receiverMandator",
                 "receiverEnvironment",
                 "receiverServerGroup",
+                "receiverServer",
                 "postScript",
                 "postScriptParams",
-                "receiverDirectory"
+                "receiverDirectory",
+                "receiverUID"
             ).by("name")
 
         val queryResult = query.toSet()

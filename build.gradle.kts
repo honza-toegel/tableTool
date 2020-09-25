@@ -52,3 +52,12 @@ application {
     // Define the main class for the application.
     mainClassName = "org.jto.tabletool.MainKt"
 }
+
+/*tasks.jar {
+    manifest {
+        attributes(
+            "Implementation-Title" to "TableTool",
+            "Implementation-Version" to archiveVersion
+        )
+    }
+}*/
