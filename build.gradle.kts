@@ -8,8 +8,9 @@ plugins {
     // Apply the Kotlin JVM plugin to add support for Kotlin.
     id("org.jetbrains.kotlin.jvm") version "1.3.72"
 
-    // Apply the application plugin to add support for building a CLI application.
-    application
+    id("com.github.johnrengelman.shadow") version "4.0.4"
+    
+    java
 }
 
 repositories {
@@ -48,16 +49,23 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
 }
 
-application {
-    // Define the main class for the application.
-    mainClassName = "org.jto.tabletool.MainKt"
+
+tasks {
+    named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+        archiveBaseName.set("tableTool")
+        mergeServiceFiles()
+        manifest {
+            attributes(
+                "Implementation-Title" to "TableTool",
+                "Implementation-Version" to archiveVersion,
+                "Main-Class" to "org.jto.tabletool.MainKt"
+            )
+        }
+    }
 }
 
-/*tasks.jar {
-    manifest {
-        attributes(
-            "Implementation-Title" to "TableTool",
-            "Implementation-Version" to archiveVersion
-        )
+tasks {
+    build {
+        dependsOn(shadowJar)
     }
-}*/
+}
