@@ -9,8 +9,10 @@ plugins {
     id("org.jetbrains.kotlin.jvm") version "1.3.72"
 
     id("com.github.johnrengelman.shadow") version "4.0.4"
-    
+
     java
+    `maven-publish`
+    id("com.jfrog.bintray") version "1.8.5"
 }
 
 repositories {
@@ -19,6 +21,72 @@ repositories {
     jcenter()
 
     maven ("https://kotlin.bintray.com/kotlinx" )
+}
+
+val versionNumber = "1.1"
+val artifactVersion = "$versionNumber"
+val artifactDesc = "Kotlin tool to compare table data in diff style"
+val githubRepo = "honza-toegel/TableTool"
+val githubUrl = "https://github.com/$githubRepo.git"
+val githubReadme = "README.md"
+
+val pomUrl = "https://github.com/$githubRepo"
+val pomScmUrl = pomUrl
+val pomIssueUrl = "$pomUrl/issues"
+val pomDesc = pomUrl
+
+val pomLicenseName = "Apache-2.0"
+val pomLicenseUrl = "https://opensource.org/licenses/apache2.0.php"
+val pomLicenseDist = "repo"
+
+val pomDeveloperId = "honza.toegel"
+val pomDeveloperName = "Jan Toegel"
+
+group = "org.jto.tabletool"
+version = artifactVersion
+
+bintray {
+    user = "honza-toegel"
+    key = "70e841d49cebd32f64d026f6638a3f4b9b215735"
+    setPublications( "MyPublication" )
+    with (pkg) {
+        repo = "TableTool"
+        name = "TableTool"
+        setLicenses(pomLicenseName)
+        vcsUrl = githubUrl
+        with(version) {
+            name = versionNumber
+            desc = artifactDesc
+        }
+    }
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("MyPublication") {
+            shadow.component(this)
+
+            pom.withXml {
+                asNode().apply {
+                    appendNode("description", pomDesc)
+                    appendNode("name", rootProject.name)
+                    appendNode("url", pomUrl)
+                    appendNode("licenses").appendNode("license").apply {
+                        appendNode("name", pomLicenseName)
+                        appendNode("url", pomLicenseUrl)
+                        appendNode("distribution", pomLicenseDist)
+                    }
+                    appendNode("developers").appendNode("developer").apply {
+                        appendNode("id", pomDeveloperId)
+                        appendNode("name", pomDeveloperName)
+                    }
+                    appendNode("scm").apply {
+                        appendNode("url", pomScmUrl)
+                    }
+                }
+            }
+        }
+    }
 }
 
 dependencies {
@@ -32,10 +100,9 @@ dependencies {
 
     // Tinkerpop - Core
     implementation("org.apache.tinkerpop:tinkergraph-gremlin:3.4.7")
-
-    // https://mvnrepository.com/artifact/org.apache.poi/poi-ooxml
+    //Apache poi for excel files
     implementation(  "org.apache.poi:poi-ooxml:4.1.2")
-
+    //Google Diff
     implementation ("org.bitbucket.cowwoc:diff-match-patch:1.2")
 
     implementation( "org.slf4j:slf4j-api:1.7.30")
@@ -56,7 +123,7 @@ tasks {
         mergeServiceFiles()
         manifest {
             attributes(
-                "Implementation-Title" to "TableTool",
+                "Implementation-Title" to "TableTool-all",
                 "Implementation-Version" to archiveVersion,
                 "Main-Class" to "org.jto.tabletool.MainKt"
             )
@@ -69,3 +136,4 @@ tasks {
         dependsOn(shadowJar)
     }
 }
+

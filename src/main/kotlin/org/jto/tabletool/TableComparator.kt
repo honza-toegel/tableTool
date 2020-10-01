@@ -48,7 +48,7 @@ enum class RowCompareDisplay {
 class RowCompareResult(
     val cells: Map<String, CellCompareResult>, leftToRight: Boolean, minimumComparableScore: Double
 ) : Comparable<RowCompareResult> {
-    val totalPoints: Double = cells.values.sumByDouble { it.compareResult }
+    val totalPoints: Double = cells.values.filter { it.display != CellCompareDisplay.Ignored }.sumByDouble { it.compareResult }
     val comparableScore: Double = totalPoints / cells.values.filter { it.display == CellCompareDisplay.Comparable }.size
     val totalScore: Double = totalPoints / cells.values.filter { it.display != CellCompareDisplay.Ignored }.size
 
@@ -68,7 +68,7 @@ class RowCompareResult(
         "Cells: $cells totalPoints: $totalPoints, comparableScore: $comparableScore, totalScore: $totalScore, Display: $display"
 }
 
-class TableDataComparator(
+class TableComparator(
     leftTable: Set<Map<String, String>>,
     rightTable: Set<Map<String, String>>,
     val ignoredColumns: Set<String>,

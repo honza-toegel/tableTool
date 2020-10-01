@@ -86,7 +86,7 @@ class ComparatorResultExcelWriter(
                 RowCompareDisplay.LeftRightCompared -> {
                     when (rowCompareResult.comparableScore == 1.0) {
                         true -> {
-                            setCellValue("="); cellStyle = wb.styles["normal"]
+                            setCellValue("= tp:${rowCompareResult.totalPoints} cs:${rowCompareResult.comparableScore} ts:${rowCompareResult.totalScore}"); cellStyle = wb.styles["normal"]
                         }
                         false -> {
                             setCellValue("~"); cellStyle = wb.styles["comparable"]
