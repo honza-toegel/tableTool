@@ -1,0 +1,1080 @@
+Index: src/main/kotlin/org/jto/tabletool/StyledWorkbook.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/StyledWorkbook.kt	(revision 49f36a59c1784ff25606c975e9cbc85185716a33)
++++ src/main/kotlin/org/jto/tabletool/StyledWorkbook.kt	(date 1604204836716)
+@@ -12,11 +12,15 @@
+     private fun createStyles(): Map<String, CellStyle> = mapOf(
+         "leftOnly" to createSolidStyle( rgb(206, 250, 221)), //IndexedColors.LIGHT_GREEN
+         "rightOnly" to createSolidStyle( rgb(254, 207, 200)), //IndexedColors.ROSE
++        "leftOnly-underline" to createSolidStyle( rgb(206, 250, 221)).apply { setFont(fonts["underline"]) }, //IndexedColors.LIGHT_GREEN
++        "rightOnly-underline" to createSolidStyle( rgb(254, 207, 200)).apply { setFont(fonts["underline"]) }, //IndexedColors.ROSE
+         "notComparableLeft" to createSolidStyle( IndexedColors.GREY_25_PERCENT),
+         "notComparableRight" to createSolidStyle( IndexedColors.GREY_25_PERCENT),
+         "comparable" to createSolidStyle( rgb(237, 197, 69)),
+         "header" to createSolidStyle( IndexedColors.GREY_40_PERCENT).apply { setFont(fonts["bold"]) },
+-        "normal" to createStyle()
++        "normal" to createStyle(),
++        "normal-underline" to createStyle().apply { setFont(fonts["underline"]) },
++        "normal-strikeout" to createStyle().apply { setFont(fonts["strikeout"]) }
+     )
+ 
+     private fun rgb(r: Int, g: Int, b: Int): XSSFColor =
+@@ -53,12 +57,14 @@
+ 
+     private fun createFonts(): Map<String, XSSFFont> =
+         mapOf(
+-            "underline" to XSSFFont().apply { underline = XSSFFont.U_SINGLE; color = IndexedColors.GREEN.index }, //color = IndexedColors.RED.index
+-            "strikeout" to XSSFFont().apply {
++            "underline" to createFont().apply { underline = XSSFFont.U_SINGLE; },
++            "underline-green" to createFont().apply { underline = XSSFFont.U_SINGLE; color = IndexedColors.GREEN.index }, //color = IndexedColors.RED.index
++            "strikeout" to createFont().apply { strikeout = true },
++            "strikeout-red" to createFont().apply {
+                 strikeout = true; family = FontFamily.SWISS.value; setColor(rgb(141, 25, 17))
+             },
+-            "bold" to XSSFFont().apply { bold = true },
+-            "normal" to XSSFFont()
++            "bold" to createFont().apply { bold = true },
++            "normal" to createFont()
+         )
+ 
+ }
+\ No newline at end of file
+Index: src/main/kotlin/org/jto/tabletool/CompareCommand.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/CompareCommand.kt	(revision 49f36a59c1784ff25606c975e9cbc85185716a33)
++++ src/main/kotlin/org/jto/tabletool/CompareCommand.kt	(date 1603967095161)
+@@ -57,7 +57,7 @@
+         .default(
+             "id:Id:ib;mftService:Service Name;mftType:ASI File Type;senderServer:Supplier Host;receiverServer:Receiver Host;senderServerGroup:Supplier HostGroup:i;receiverServerGroup:Receiver HostGroup:i;postScript:Postprocessing Command;" +
+                     "postScriptParams:Postprocessing Arguments;receiverDirectory:Receiver Directory;senderUID:Supplier UID;receiverUID:Receiver UID;senderMandator:SUMAN;senderEnvironment:SURTE;receiverMandator:DEMAN;receiverEnvironment:DERTE;" +
+-                    "instance:Instance;validFrom:Valid From;validTo:Valid To;state:State"
++                    "instance:Instance;validFrom:Valid From;validTo:Valid To;state:State;label:Label"
+         )
+ 
+     override fun execute() {
+@@ -79,16 +79,21 @@
+             }
+ 
+         // Left source table
+-        val leftTable = loadInputTable(leftInputType, leftInputFile)
++        val leftTables = loadInputTables(leftInputType, leftInputFile, setOf(
++            GraphQueryTableSpecification.MftDefinition, GraphQueryTableSpecification.MftLabel))
+ 
+         // Right source table
+-        val rightTable = loadInputTable(rightInputType, rightInputFile)
++        val rightTables = loadInputTables(rightInputType, rightInputFile, setOf())
++        val rightTable = rightTables[fileNameWithoutExtension(rightInputFile)]!!
+ 
+         val leftInputName = fileNameWithoutExtension(leftInputFile)
+         val rightInputName = fileNameWithoutExtension(rightInputFile)
+ 
++        // Enrich right extract with MftLabel
++        val enrichedRight = TableEnrichment(rightTable, leftTables["MftLabel"]!!, setOf("label"), outputHeaderColumns.filter { it.ignoredCompare }.map { it.name }.toSet()).enrichTable()
++
+         // Compare left with right table
+-        val result = TableComparator(leftTable, rightTable, setOf(groupByField) + outputHeaderColumns.filter { it.ignoredCompare }.map { it.name },
++        val result = TableComparator(leftTables["MftDefinition"]!!, enrichedRight, setOf(groupByField) + outputHeaderColumns.filter { it.ignoredCompare }.map { it.name },
+             groupByField, minimumComparableScore
+         ).compareTables()
+ 
+@@ -97,9 +102,11 @@
+         logger.info("Adding compare left <> right sheet")
+         ComparatorResultExcelWriter(result, outputHeaderColumns, leftInputName, rightInputName, workbook).createCompareResultSheet()
+         logger.info("Adding left file sheet")
+-        TableExcelWriter(leftTable, outputHeaderColumns, workbook, leftInputName, groupByField ).createDefinitionsSheet()
++        TableExcelWriter(leftTables["MftDefinition"]!!, outputHeaderColumns, workbook, "MftDefinition", groupByField ).createDefinitionsSheet()
++        logger.info("Adding left file sheet")
++        TableExcelWriter(leftTables["MftLabel"]!!, outputHeaderColumns, workbook, "MftLabel", groupByField ).createDefinitionsSheet()
+         logger.info("Adding right file sheet")
+-        TableExcelWriter(rightTable, outputHeaderColumns, workbook, rightInputName, groupByField ).createDefinitionsSheet()
++        TableExcelWriter(enrichedRight, outputHeaderColumns, workbook, rightInputName, groupByField ).createDefinitionsSheet()
+ 
+         logger.info("Writing compare result into file: $outputFile")
+         workbook.write(FileOutputStream(outputFile))
+@@ -107,7 +114,7 @@
+     }
+ 
+     companion object {
+-        fun loadInputTable(inputType: InputType, inputFile: String): Set<Map<String, TableValue>> {
++        fun loadInputTables(inputType: InputType, inputFile: String, queries:Set<InputTableSpecification>): Map<String, Set<Map<String, TableValue>>> {
+             return when (inputType) {
+                 InputType.GraphDefinitionFile -> {
+                     val graph: Graph = TinkerGraph.open()
+@@ -115,12 +122,16 @@
+                     //Load graph from excel
+                     ExcelGraphLoader(inputFile, g).graphLoadTest()
+                     //Extract data out of graph (can be replaced by groovy to have configurable query)
+-                    GraphQueryTableLoader(g).extractData()
++                    return queries.map { it as GraphQueryTableSpecification }.map { query ->
++                        query.name to enrichByRowId(query.queryClass.constructors.first().call(g).extractData())
++                    }.toMap()
+                 }
+                 InputType.Table -> {
+-                    ExcelTableLoader(inputFile).loadTableData()
++                    mapOf(fileNameWithoutExtension(inputFile) to enrichByRowId(ExcelTableLoader(inputFile).loadTableData()))
+                 }
+-            }.mapIndexed { rowIndex, row -> row + ("id" to StringTableValue("$rowIndex")) }.toSet()
++            }
+         }
++
++        fun enrichByRowId(table:Set<Map<String, TableValue>>):Set<Map<String, TableValue>> = table.mapIndexed { rowIndex, row -> row + ("id" to StringTableValue("$rowIndex")) }.toSet()
+     }
+ }
+\ No newline at end of file
+Index: src/main/kotlin/org/jto/tabletool/ComparedTableExcelWriter.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/ComparedTableExcelWriter.kt	(revision 49f36a59c1784ff25606c975e9cbc85185716a33)
++++ src/main/kotlin/org/jto/tabletool/ComparedTableExcelWriter.kt	(date 1604204220246)
+@@ -164,7 +164,6 @@
+                     RowCompareDisplay.LeftOnly -> ""
+                     RowCompareDisplay.RightOnly -> ""
+                     RowCompareDisplay.LeftRightCompared -> {
+-                        //"cr:${cellCompareResult.compareResult}"
+                         when (display) {
+                             CellCompareDisplay.Comparable -> when (cellCompareResult.compareResult == 1.0) {
+                                 true -> ""
+@@ -238,8 +237,14 @@
+         cell.cellStyle = when (outputHeaderColumn.ignoredCompare) {
+             true -> wb.styles["normal"]
+             false -> when (rowCompareResult.display) {
+-                RowCompareDisplay.LeftOnly -> wb.styles["leftOnly"]
+-                RowCompareDisplay.RightOnly -> wb.styles["rightOnly"]
++                RowCompareDisplay.LeftOnly -> when (cellCompareResult.leftValue is RegExpTableValue) {
++                    false -> wb.styles["leftOnly"]
++                    true -> wb.styles["leftOnly-underline"]
++                }
++                RowCompareDisplay.RightOnly -> when (cellCompareResult.rightValue is RegExpTableValue) {
++                    false -> wb.styles["rightOnly"]
++                    true -> wb.styles["rightOnly-underline"]
++                }
+                 RowCompareDisplay.LeftRightCompared -> {
+                     when (cellCompareResult.display) {
+                         CellCompareDisplay.Comparable -> {
+@@ -269,8 +274,8 @@
+             richText.append(
+                 it.text,
+                 when (it.operation) {
+-                    DiffMatchPatch.Operation.INSERT -> wb.fonts["underline"]
+-                    DiffMatchPatch.Operation.DELETE -> wb.fonts["strikeout"]
++                    DiffMatchPatch.Operation.INSERT -> wb.fonts["underline-green"]
++                    DiffMatchPatch.Operation.DELETE -> wb.fonts["strikeout-red"]
+                     DiffMatchPatch.Operation.EQUAL -> wb.fonts["normal"]
+                 }
+             )
+@@ -280,8 +285,8 @@
+ 
+     private fun createLeftRightText(leftVal: TableValue, rightVal: TableValue): XSSFRichTextString {
+         val richText = XSSFRichTextString()
+-        richText.append(leftVal.toString(), wb.fonts["underline"])
+-        richText.append(rightVal.toString(), wb.fonts["strikeout"])
++        richText.append(leftVal.toString(), wb.fonts["underline-green"])
++        richText.append(rightVal.toString(), wb.fonts["strikeout-red"])
+         return richText
+     }
+ }
+\ No newline at end of file
+Index: src/main/kotlin/org/jto/tabletool/TableValue.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/TableValue.kt	(revision 49f36a59c1784ff25606c975e9cbc85185716a33)
++++ src/main/kotlin/org/jto/tabletool/TableValue.kt	(date 1604980083000)
+@@ -48,12 +48,7 @@
+     override fun diff(other: TableValue): List<DiffMatchPatch.Diff> =
+         when (other) {
+             is RegExpTableValue -> dmp.diffMain(regex.pattern, other.regex.pattern, false)
+-            is StringTableValue -> {
+-                when (other.str.matches(regex)) {
+-                    true -> listOf(DiffMatchPatch.Diff(DiffMatchPatch.Operation.EQUAL, other.str))
+-                    false -> listOf(DiffMatchPatch.Diff(DiffMatchPatch.Operation.INSERT, other.str))
+-                }
+-            }
++            is StringTableValue -> other.diff(this)
+             else -> emptyList()
+         }
+     override fun toString(): String = regex.pattern
+Index: build.gradle.kts
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- build.gradle.kts	(revision 49f36a59c1784ff25606c975e9cbc85185716a33)
++++ build.gradle.kts	(date 1603897204393)
+@@ -45,6 +45,8 @@
+ 
+     implementation ("org.bitbucket.cowwoc:diff-match-patch:1.2")
+ 
++    implementation("com.beust:klaxon:5.0.1")
++
+     implementation( "org.slf4j:slf4j-api:1.7.30")
+     implementation( "ch.qos.logback:logback-classic:1.2.3")
+     implementation( "ch.qos.logback:logback-core:1.2.3")
+Index: src/main/kotlin/org/jto/tabletool/ExtractOnlyCommand.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/ExtractOnlyCommand.kt	(revision 49f36a59c1784ff25606c975e9cbc85185716a33)
++++ src/main/kotlin/org/jto/tabletool/ExtractOnlyCommand.kt	(date 1603961995016)
+@@ -35,7 +35,7 @@
+         .default(
+             "id:Id:i;mftService:Service Name;mftType:ASI File Type;senderServer:Supplier Host;receiverServer:Receiver Host;senderServerGroup:Supplier HostGroup:i;receiverServerGroup:Receiver HostGroup:i;postScript:Postprocessing Command;" +
+                     "postScriptParams:Postprocessing Arguments;receiverDirectory:Receiver Directory;senderUID:Supplier UID;receiverUID:Receiver UID;senderMandator:SUMAN;senderEnvironment:SURTE;receiverMandator:DEMAN;receiverEnvironment:DERTE;" +
+-                    "instance:Instance;validFrom:Valid From;validTo:Valid To;state:State"
++                    "instance:Instance;validFrom:Valid From;validTo:Valid To;state:State;label:Label"
+         )
+ 
+ 
+@@ -52,12 +52,12 @@
+                 )
+             }
+ 
+-        val dataTable = CompareCommand.loadInputTable(inputType, inputFile)
++        val dataTable = CompareCommand.loadInputTables(inputType, inputFile, setOf())
+ 
+         val workbook = StyledWorkbook()
+ 
+         TableExcelWriter(
+-            dataTable,
++            dataTable.values.first(),
+             outputHeaderColumns,
+             workbook,
+             fileNameWithoutExtension(inputFile),
+Index: src/main/kotlin/org/jto/tabletool/MftLabelGraphQuery.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/MftLabelGraphQuery.kt	(date 1604073190900)
++++ src/main/kotlin/org/jto/tabletool/MftLabelGraphQuery.kt	(date 1604073190900)
+@@ -0,0 +1,116 @@
++package org.jto.tabletool
++
++import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
++import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
++import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.`__`.*
++import org.apache.tinkerpop.gremlin.structure.Vertex
++
++class MftLabelGraphQuery(g: GraphTraversalSource):GraphQueryTableLoader(g) {
++
++
++    override fun getQuery(): GraphTraversal<Vertex, Map<String, String>> {
++
++        logger.info("Construct graph query..")
++
++        //N/A serve for OUTER JOINS (not removing results having no value)
++        val notAvailable: Vertex = g.addV("notAvailable").property("name", "N/A").next()
++
++        val query = g.V().union(
++            match<String, String>(
++                As<String>("label").hasLabel("label").coalesce(`in`("hasLabel").hasLabel("mftType"), g.V(notAvailable.id())).`as`("mftType"),
++                As<String>("label").hasLabel("label").coalesce(`in`("hasLabel").hasLabel("postScript"), g.V(notAvailable.id())).`as`("postScript"),
++                As<String>("label").hasLabel("label").coalesce(`in`("hasLabel").hasLabel("postScriptParams"), g.V(notAvailable.id())).`as`("postScriptParams"),
++                As<String>("label").hasLabel("label").coalesce(`in`("hasLabel").hasLabel("receiverDirectory"), g.V(notAvailable.id())).`as`("receiverDirectory"),
++
++                As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        `in`("hasSenderLabel").hasLabel("environment"),
++                        `in`("hasSenderLabel").hasLabel("manEnvAppl").out("hasEnvironment"),
++                        `in`("hasLabel").hasLabel("manTransfer").out("hasSender").out("hasEnvironment")
++                    ), g.V(notAvailable.id())).`as`("senderEnvironment"),
++                As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        `in`("hasSenderLabel").hasLabel("mandator"),
++                        `in`("hasSenderLabel").hasLabel("manEnvAppl").out("hasMandator"),
++                        `in`("hasLabel").hasLabel("manTransfer").out("hasSender").out("hasMandator")
++                    ), g.V(notAvailable.id())).`as`("senderMandator"),
++                As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        `in`("hasSenderLabel").hasLabel("serverGroup").out("hasServer"),
++                        `in`("hasSenderLabel").hasLabel("server")
++                    ), g.V(notAvailable.id())).`as`("senderServer"),
++
++                /*As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        `in`("hasReceiverLabel").hasLabel("manEnvAppl"),
++                        `in`("hasLabel").hasLabel("manTransfer").out("hasReceiver")
++                    ), g.V(notAvailable.id())).`as`("receiverManEnv"),*/
++
++                As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        `in`("hasReceiverLabel").hasLabel("environment"),
++                        `in`("hasReceiverLabel").hasLabel("manEnvAppl").out("hasEnvironment"),
++                        `in`("hasLabel").hasLabel("manTransfer").out("hasReceiver").out("hasEnvironment")
++                    ), g.V(notAvailable.id())).`as`("receiverEnvironment"),
++                As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        `in`("hasReceiverLabel").hasLabel("mandator"),
++                        `in`("hasReceiverLabel").hasLabel("manEnvAppl").out("hasMandator"),
++                        `in`("hasLabel").hasLabel("manTransfer").out("hasReceiver").out("hasMandator")
++                    ), g.V(notAvailable.id())).`as`("receiverMandator"),
++                As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        `in`("hasReceiverLabel").hasLabel("serverGroup").out("hasServer"),
++                        `in`("hasReceiverLabel").hasLabel("server")
++                    ), g.V(notAvailable.id())).`as`("receiverServer")
++
++                /*As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        As<String>("senderManEnv").out("hasMandator"),
++                        `in`("hasSenderLabel").hasLabel("mandator")
++                    ), g.V(notAvailable.id())).`as`("senderMandator"),
++                As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        As<String>("senderManEnv").out("hasEnvironment"),
++                        `in`("hasSenderLabel").hasLabel("environment")
++                    ), g.V(notAvailable.id())).`as`("senderEnvironment"),
++                As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        As<String>("receiverManEnv").out("hasMandator"),
++                        `in`("hasReceiverLabel").hasLabel("mandator")
++                    ), g.V(notAvailable.id())).`as`("receiverMandator"),
++                As<String>("label").hasLabel("label").coalesce(
++                    union<Vertex, Vertex>(
++                        As<String>("receiverManEnv").out("hasEnvironment"),
++                        `in`("hasReceiverLabel").hasLabel("environment")
++                    ), g.V(notAvailable.id())).`as`("receiverEnvironment")*/
++                //As<String>("senderManEnv").coalesce(out("hasMandator"), g.V(notAvailable.id())).`as`("senderMandator"),
++                //As<String>("senderManEnv").coalesce(out("hasEnvironment"), g.V(notAvailable.id())).`as`("senderEnvironment"),
++                //As<String>("receiverManEnv").coalesce(out("hasMandator"), g.V(notAvailable.id())).`as`("receiverMandator"),
++                //As<String>("receiverManEnv").coalesce(out("hasEnvironment"), g.V(notAvailable.id())).`as`("receiverEnvironment")
++
++            )
++                //Result columns
++                .select<String>(
++                    "mftType",
++                    //"senderManEnv",
++                    "senderMandator",
++                    "senderEnvironment",
++                    "senderServer",
++
++                    "receiverMandator",
++                    "receiverEnvironment",
++                    "receiverServer",
++
++                    "postScript",
++                    "postScriptParams",
++                    "receiverDirectory",
++
++                    "label"
++                ).by("name")
++        )
++
++        return query
++    }
++
++}
+\ No newline at end of file
+Index: src/main/kotlin/org/jto/tabletool/TableExcelWriter.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/TableExcelWriter.kt	(revision 49f36a59c1784ff25606c975e9cbc85185716a33)
++++ src/main/kotlin/org/jto/tabletool/TableExcelWriter.kt	(date 1604204836694)
+@@ -45,8 +45,8 @@
+                                 setCellValue(tableValue.toString())
+                                 cellStyle = when (tableValue) {
+                                     is StringTableValue -> wb.styles["normal"]
+-                                    is RegExpTableValue -> wb.styles["underline"]
+-                                    else -> wb.styles["strikeout"]
++                                    is RegExpTableValue -> wb.styles["normal-underline"]
++                                    else -> wb.styles["normal-strikeout"]
+                                 }
+                             }
+                         }
+Index: src/main/kotlin/org/jto/tabletool/GraphQueryTableLoader.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/GraphQueryTableLoader.kt	(revision 49f36a59c1784ff25606c975e9cbc85185716a33)
++++ src/main/kotlin/org/jto/tabletool/GraphQueryTableLoader.kt	(date 1603380676086)
+@@ -1,192 +1,24 @@
+ package org.jto.tabletool
+ 
+-import org.apache.tinkerpop.gremlin.process.traversal.P
++import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
+ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
+-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.`__`.*
+ import org.apache.tinkerpop.gremlin.structure.Vertex
+ import org.slf4j.LoggerFactory
+ 
+-class GraphQueryTableLoader(val g: GraphTraversalSource) {
+-
++abstract class GraphQueryTableLoader(protected val g: GraphTraversalSource) {
+     companion object {
+         @Suppress("JAVA_CLASS_ON_COMPANION")
+         @JvmStatic
+-        private val logger = LoggerFactory.getLogger(javaClass.enclosingClass)
++        val logger = LoggerFactory.getLogger(javaClass.enclosingClass)
+     }
++
++    abstract fun getQuery():GraphTraversal<Vertex, Map<String,String>>
+ 
+     fun extractData(): Set<Map<String, TableValue>> {
+ 
+         logger.info("Execute graph query to extract data..")
+ 
+-        //N/A serve for OUTER JOINS (not removing results having no value)
+-        val notAvailable: Vertex = g.addV("notAvailable").property("name", "N/A").next()
+-
+-        val query = g.V().match<String>(
+-            As<String>("mftType").out("hasManTransfer").`as`("manTransfer"),
+-            As<String>("manTransfer").out("hasSender").`as`("senderManEnv"),
+-            As<String>("manTransfer").out("hasReceiver").`as`("receiverManEnv"),
+-            As<String>("senderManEnv").out("hasMandator").`as`("senderMandator"),
+-            As<String>("senderManEnv").out("hasEnvironment").`as`("senderEnvironment"),
+-            As<String>("receiverManEnv").out("hasMandator").`as`("receiverMandator"),
+-            As<String>("receiverManEnv").out("hasEnvironment").`as`("receiverEnvironment"),
+-            As<String>("mftType").out("hasSenderComponent").`as`("senderComponent"),
+-            As<String>("mftType").out("hasReceiverComponent").`as`("receiverComponent")
+-        )
+-            //Receiver server group
+-            .match<String>(
+-                As<String>("receiverComponent").coalesce(out("deployedOn"), g.V(notAvailable.id()))
+-                    .`as`("receiverServerGroup"),
+-                As<String>("receiverServerGroup").coalesce(out("restrictedManEnv"), g.V(notAvailable.id()))
+-                    .or(where<String>(P.eq("receiverManEnv")), hasLabel<String>("notAvailable"))
+-            )
+-            .select<String>("receiverServerGroup").`as`("receiverServerGroup")
+-
+-            //Receiver server
+-            .coalesce(As<String>("receiverServerGroup").out("hasServer"), g.V(notAvailable.id())).`as`("receiverServer")
+-
+-            //Sender server group
+-            .match<String>(
+-                As<String>("senderComponent").coalesce(out("deployedOn"), g.V(notAvailable.id()))
+-                    .`as`("senderServerGroup"),
+-                As<String>("senderServerGroup").coalesce(out("restrictedManEnv"), g.V(notAvailable.id()))
+-                    .or(where<String>(P.eq("senderManEnv")), hasLabel<String>("notAvailable"))
+-            ).select<String>("senderServerGroup").`as`("senderServerGroup")
+-
+-            //Sender server
+-            .coalesce(As<String>("senderServerGroup").out("hasServer"), g.V(notAvailable.id())).`as`("senderServer")
+-
+-            //Select a postScript by priority, restrict by given restrictions
+-            .coalesce(
+-                //First priority is postscript related to mftType
+-                match<String, Vertex>(
+-                    As<String>("mftType").`out`("hasPostScript").`as`("postScript"),
+-                    As<String>("postScript").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
+-                    As<String>("postScript").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
+-                    As<String>("postScript").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
+-                ).select("postScript"),
+-                //Second priority is postscript related to receiverComponent which can be restricted to mandator/environment/serverGroup
+-                match<String, Vertex>(
+-                    As<String>("receiverComponent").`out`("hasPostScript").`as`("postScript"),
+-                    As<String>("postScript").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
+-                    As<String>("postScript").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
+-                    As<String>("postScript").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
+-                ).select("postScript"),
+-                //No postscript defined
+-                g.V(notAvailable.id())
+-            ).`as`("postScript")
+-
+-            //Select a postScriptParams by priority, restrict by given restrictions
+-            .coalesce(
+-                //First priority is postScriptParams related to mftType
+-                match<String, Vertex>(
+-                    As<String>("mftType").`out`("hasPostScriptParams").`as`("postScriptParams"),
+-                    As<String>("postScriptParams").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
+-                    As<String>("postScriptParams").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
+-                    As<String>("postScriptParams").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
+-                ).select("postScriptParams"),
+-                //Second priority is postScriptParams related to receiverComponent which can be restricted to mandator/environment/serverGroup
+-                match<String, Vertex>(
+-                    As<String>("receiverComponent").`out`("hasPostScriptParams").`as`("postScriptParams"),
+-                    As<String>("postScriptParams").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
+-                    As<String>("postScriptParams").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
+-                    As<String>("postScriptParams").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
+-                ).select("postScriptParams"),
+-                //No postscript defined
+-                g.V(notAvailable.id())
+-            ).`as`("postScriptParams")
+-
+-            //Select a receiverDirectory by priority, restrict by given restrictions
+-            .coalesce(
+-                //First priority is receiverDirectory related to mftType
+-                match<String, Vertex>(
+-                    As<String>("mftType").`out`("hasReceiverDirectory").`as`("receiverDirectory"),
+-                    As<String>("receiverDirectory").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
+-                    As<String>("receiverDirectory").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
+-                    As<String>("receiverDirectory").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
+-                ).select("receiverDirectory"),
+-                //Second priority is receiverDirectory related to receiverComponent which can be restricted to mandator/environment/serverGroup
+-                match<String, Vertex>(
+-                    As<String>("receiverComponent").`out`("hasReceiverDirectory").`as`("receiverDirectory"),
+-                    As<String>("receiverDirectory").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
+-                    As<String>("receiverDirectory").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
+-                    As<String>("receiverDirectory").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
+-                ).select("receiverDirectory"),
+-                //No postscript defined
+-                g.V(notAvailable.id())
+-            ).`as`("receiverDirectory")
+-
+-            //Select a receiverUID by priority, restrict by given restrictions
+-            .coalesce(
+-                //receiverUID related to receiverComponent which can be restricted to mandator/environment/serverGroup
+-                match<String, Vertex>(
+-                    As<String>("receiverComponent").`out`("hasUID").`as`("receiverUID"),
+-                    As<String>("receiverUID").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
+-                    As<String>("receiverUID").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
+-                    As<String>("receiverUID").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
+-                ).select("receiverUID"),
+-                //No postscript defined
+-                g.V(notAvailable.id())
+-            ).`as`("receiverUID")
+-
+-            //Select a senderUID by priority, restrict by given restrictions
+-            .coalesce(
+-                //senderUID related to receiverComponent which can be restricted to mandator/environment/serverGroup
+-                match<String, Vertex>(
+-                    As<String>("senderComponent").`out`("hasUID").`as`("senderUID"),
+-                    As<String>("senderUID").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
+-                    As<String>("senderUID").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
+-                    As<String>("senderUID").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
+-                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
+-                ).select("senderUID"),
+-                //No postscript defined
+-                g.V(notAvailable.id())
+-            ).`as`("senderUID")
+-
+-            //Result columns
+-            .select<String>(
+-                "mftType",
+-                "manTransfer",
+-                "senderComponent",
+-                "senderMandator",
+-                "senderEnvironment",
+-                "senderServerGroup",
+-                "senderServer",
+-                "senderUID",
+-                "receiverComponent",
+-                "receiverMandator",
+-                "receiverEnvironment",
+-                "receiverServerGroup",
+-                "receiverServer",
+-                "postScript",
+-                "postScriptParams",
+-                "receiverDirectory",
+-                "receiverUID"
+-            ).by("name")
+-
+-        val queryResult = query.toSet()
++        val queryResult = getQuery().toSet()
+ 
+         logger.info("Query returned ${queryResult.size} results")
+ 
+@@ -196,20 +28,23 @@
+             //println((it["mftType"] as Vertex).value<String>("name"))
+         }
+ 
++        return removeNaCells(queryResult)
++    }
+ 
+-        //Remove "N/A" cells
+-        return queryResult.map { row -> row.mapNotNull { cell -> when (cell.value == "N/A") {
+-            true -> null
+-            false -> cell.key to toTableValue(cell.value)
+-        } }.toMap() }.toSet()
+-
+-    }
++    //Remove "N/A" cells
++    private fun removeNaCells(table:Set<Map<String,String>>) = table.map { row ->
++        row.mapNotNull { cell ->
++            when (cell.value == "N/A") {
++                true -> null
++                false -> cell.key to toTableValue(cell.value)
++            }
++        }.toMap() }.toSet()
+ 
+-    private fun toTableValue(str:String):TableValue =
++    protected fun toTableValue(str:String):TableValue =
+         when ( str.startsWith("''") && str.endsWith("''") )
+         {
+             false -> StringTableValue(str)
+             true -> RegExpTableValue(str.removeSurrounding("''").toRegex())
+         }
++}
+ 
+-}
+\ No newline at end of file
+Index: src/main/kotlin/org/jto/tabletool/Main.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/Main.kt	(revision 49f36a59c1784ff25606c975e9cbc85185716a33)
++++ src/main/kotlin/org/jto/tabletool/Main.kt	(date 1603961995037)
+@@ -4,11 +4,14 @@
+ package org.jto.tabletool
+ 
+ 
++import com.beust.klaxon.Klaxon
+ import org.apache.tinkerpop.gremlin.process.traversal.P
+ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
+ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.`__`.*
+ import org.apache.tinkerpop.gremlin.structure.Vertex
+ import kotlinx.cli.*
++import java.io.File
++import kotlin.reflect.KClass
+ 
+ 
+ fun <A> As(label: String?, vararg labels: String?): GraphTraversal<A, A> = start<A>().`as`(label, *labels)
+@@ -20,6 +23,17 @@
+     Table
+ }
+ 
++open class InputTableSpecification(val name:String)
++
++class GraphQueryTableSpecification(name: String, val queryClass: KClass<out GraphQueryTableLoader>):InputTableSpecification(name) {
++    companion object {
++        val MftDefinition = GraphQueryTableSpecification("MftDefinition", MftDefinitionGraphQuery::class)
++        val MftLabel = GraphQueryTableSpecification("MftLabel", MftLabelGraphQuery::class)
++    }
++}
++
++class ExcelTableExtract(name: String): InputTableSpecification(name)
++
+ enum class OutputDisplay {
+     NoOutput,
+     Both
+Index: src/main/kotlin/org/jto/tabletool/TableComparator.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/TableComparator.kt	(revision 49f36a59c1784ff25606c975e9cbc85185716a33)
++++ src/main/kotlin/org/jto/tabletool/TableComparator.kt	(date 1604980082971)
+@@ -84,23 +84,27 @@
+     leftTable: Set<Map<String, TableValue>>,
+     rightTable: Set<Map<String, TableValue>>,
+     val ignoredColumns: Set<String>,
+-    val groupByField: String = "mftType",
++    val groupByField: String = "", //By default no group-by
+     val minimumComparableScore: Double = 0.8
+ ) {
+ 
+-    private val leftTables: Map<String, Set<Map<String, TableValue>>> =
+-        leftTable.groupBy { it[groupByField].toString() }.map { it.key to it.value.toSet() }.toMap()
+-    private val rightTables: Map<String, Set<Map<String, TableValue>>> =
+-        rightTable.groupBy { it[groupByField].toString() }.map { it.key to it.value.toSet() }.toMap()
++    private val leftTables: Map<String, Set<Map<String, TableValue>>> = when (groupByField.isNotBlank()) {
++        true -> leftTable.groupBy { it[groupByField].toString() }.map { it.key to it.value.toSet() }.toMap()
++        false -> mapOf("xxx" to leftTable)
++    }
++
++    private val rightTables: Map<String, Set<Map<String, TableValue>>>  = when (groupByField.isNotBlank()) {
++        true -> rightTable.groupBy { it[groupByField].toString() }.map { it.key to it.value.toSet() }.toMap()
++        false -> mapOf("xxx" to rightTable)
++    }
+ 
+     fun compareTables(): Map<String, List<RowCompareResult>> =
+-        (leftTables.keys + rightTables.keys).map {
+-            it to
++        (leftTables.keys + rightTables.keys).map {groupByKey ->
++            groupByKey to
+                     compareGroupedTables(
+-                        leftTables[it] ?: setOf(mapOf(groupByField to StringTableValue(it))),
+-                        rightTables[it] ?: setOf(mapOf(groupByField to StringTableValue(it)))
+-                    )
+-                        .sortedWith(compareBy { it.totalPoints })
++                        leftTables[groupByKey] ?: emptySet(),
++                        rightTables[groupByKey] ?: emptySet()
++                    ).sortedWith(compareBy { it.totalPoints })
+         }.toMap()
+ 
+ 
+@@ -114,57 +118,35 @@
+         rightTable: Set<Map<String, TableValue>>
+     ): Set<RowCompareResult> {
+ 
+-        val leftToRightResults = leftTable.mapNotNull { leftTableRow ->
+-            rightTable
+-                .map { rightTableRow ->
+-                    rightTableRow to compareTableRow(
+-                        leftTableRow,
+-                        rightTableRow,
+-                        true,
+-                        minimumComparableScore
+-                    )
+-                }.maxWith(compareBy { it.second.totalPoints })
+-        }
+-        val rightToLeftResults = (rightTable subtract leftToRightResults.map { it.first }).mapNotNull { rightTableRow ->
+-            leftTable
+-                .map { leftTableRow -> compareTableRow(leftTableRow, rightTableRow, false, minimumComparableScore) }
+-                .maxWith(compareBy { it.totalPoints })
+-        }
++        return when (leftTable.isEmpty()) {
++            true -> when (rightTable.isEmpty()) {
++                true -> emptySet()
++                false -> rightTable.map { rightTableRow -> compareTableRow(emptyMap(), rightTableRow, ignoredColumns, false, minimumComparableScore) }.toSet()
++            }
++            false -> when (rightTable.isEmpty()) {
++                true -> leftTable.map { leftTableRow -> compareTableRow(leftTableRow, emptyMap(), ignoredColumns, true, minimumComparableScore) }.toSet()
++                false -> {
++                    val leftToRightResults = leftTable.mapNotNull { leftTableRow ->
++                        rightTable
++                            .map { rightTableRow ->
++                                rightTableRow to compareTableRow(
++                                    leftTableRow,
++                                    rightTableRow,
++                                    ignoredColumns,
++                                    true,
++                                    minimumComparableScore
++                                )
++                            }.maxWith(compareBy { it.second.totalPoints })
++                    }
++                    val rightToLeftResults = (rightTable subtract leftToRightResults.filter { it.second.display == RowCompareDisplay.LeftRightCompared }.map { it.first }).mapNotNull { rightTableRow ->
++                        leftTable
++                            .map { leftTableRow -> compareTableRow(leftTableRow, rightTableRow, ignoredColumns,false, minimumComparableScore) }
++                            .maxWith(compareBy { it.totalPoints })
++                    }
+ 
+-        return (leftToRightResults.map { it.second } + rightToLeftResults).toSet()
+-    }
+-
+-    private fun compareTableRow(
+-        leftTableRow: Map<String, TableValue>,
+-        rightTableRow: Map<String, TableValue>,
+-        leftToRight: Boolean,
+-        minimumComparableScore: Double
+-    ) = RowCompareResult(
+-        ((leftTableRow.keys + rightTableRow.keys).map {
+-            it to compareCellValues(leftTableRow[it], rightTableRow[it], ignoredColumns.contains(it))
+-        }).toMap(), leftToRight, minimumComparableScore
+-    )
+-
+-    private fun compareCellValues(
+-        leftValue: TableValue?,
+-        rightValue: TableValue?,
+-        ignoreCompareResult: Boolean
+-    ): CellCompareResult {
+-        val leftValueNotNull:TableValue = leftValue ?: StringTableValue.Empty
+-        val rightValueNotNull:TableValue = rightValue ?: StringTableValue.Empty
+-
+-        val diff = leftValueNotNull.diff(rightValueNotNull)
+-        val maxLength = kotlin.math.max(
+-            leftValueNotNull.toString().length,
+-            rightValueNotNull.toString().length
+-        )
+-        val compareResult = when (ignoreCompareResult) {
+-            true -> 0.0 //To be ignoredCompare
+-            false -> when (maxLength > 0) {
+-                true -> 1.0 - (TableValue.dmp.diffLevenshtein(diff).toFloat() / maxLength)
+-                false -> 1.0
++                    return (leftToRightResults.map { it.second } + rightToLeftResults).toSet()
++                }
+             }
+         }
+-        return CellCompareResult(leftValue, rightValue, compareResult, diff, ignoreCompareResult)
+     }
+ }
+\ No newline at end of file
+Index: src/main/kotlin/org/jto/tabletool/TableEnrichment.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/TableEnrichment.kt	(date 1604057442108)
++++ src/main/kotlin/org/jto/tabletool/TableEnrichment.kt	(date 1604057442108)
+@@ -0,0 +1,69 @@
++package org.jto.tabletool
++
++class TableEnrichment(
++    private val dataTable: Set<Map<String, TableValue>>,
++    private val enrichmentTable: Set<Map<String, TableValue>>,
++    val enrichmentColumns: Set<String>,
++    val ignoredColumns: Set<String>,
++    val minimumComparableScore: Double = 1.0
++) {
++    /**
++     * Enrich tables with records from another table
++     * Row is set of column names & values Set<String, TableValue>
++     */
++    fun enrichTable(): Set<Map<String, TableValue>> {
++
++        val leftToRightResults = dataTable.map { dataTableRow ->
++            val enrichmentRecords = enrichmentTable.map { enrichmentTableRow ->
++                    enrichmentTableRow to compareTableRow(
++                        dataTableRow,
++                        enrichmentTableRow,
++                        ignoredColumns,
++                        true,
++                        minimumComparableScore
++                    )
++                }.filter { it.second.display == RowCompareDisplay.LeftRightCompared }
++            dataTableRow + enrichmentColumns.map { enrichmentColumnName ->
++                enrichmentColumnName to StringTableValue(enrichmentRecords.map { it.first[enrichmentColumnName].toString() }.toSet().sorted().joinToString(", "))
++            }.toMap()
++        }
++
++        return leftToRightResults.toSet()
++    }
++
++}
++
++fun compareTableRow(
++    leftTableRow: Map<String, TableValue>,
++    rightTableRow: Map<String, TableValue>,
++    ignoredColumns: Set<String>,
++    leftToRight: Boolean,
++    minimumComparableScore: Double
++) = RowCompareResult(
++    ((leftTableRow.keys + rightTableRow.keys).map {
++        it to compareCellValues(leftTableRow[it], rightTableRow[it], ignoredColumns.contains(it))
++    }).toMap(), leftToRight, minimumComparableScore
++)
++
++private fun compareCellValues(
++    leftValue: TableValue?,
++    rightValue: TableValue?,
++    ignoreCompareResult: Boolean
++): CellCompareResult {
++    val leftValueNotNull:TableValue = leftValue ?: StringTableValue.Empty
++    val rightValueNotNull:TableValue = rightValue ?: StringTableValue.Empty
++
++    val diff = leftValueNotNull.diff(rightValueNotNull)
++    val maxLength = kotlin.math.max(
++        leftValueNotNull.toString().length,
++        rightValueNotNull.toString().length
++    )
++    val compareResult = when (ignoreCompareResult) {
++        true -> 0.0 //To be ignoredCompare
++        false -> when (maxLength > 0) {
++            true -> 1.0 - (TableValue.dmp.diffLevenshtein(diff).toFloat() / maxLength)
++            false -> 1.0
++        }
++    }
++    return CellCompareResult(leftValue, rightValue, compareResult, diff, ignoreCompareResult)
++}
+\ No newline at end of file
+Index: src/main/kotlin/org/jto/tabletool/MftDefinitionGraphQuery.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/kotlin/org/jto/tabletool/MftDefinitionGraphQuery.kt	(date 1603380676048)
++++ src/main/kotlin/org/jto/tabletool/MftDefinitionGraphQuery.kt	(date 1603380676048)
+@@ -0,0 +1,186 @@
++package org.jto.tabletool
++
++import org.apache.tinkerpop.gremlin.process.traversal.P
++import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
++import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
++import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.`__`.*
++import org.apache.tinkerpop.gremlin.structure.Vertex
++import org.slf4j.LoggerFactory
++
++class MftDefinitionGraphQuery(g: GraphTraversalSource):GraphQueryTableLoader(g) {
++
++    override fun getQuery(): GraphTraversal<Vertex, Map<String,String>> {
++
++        logger.info("Construct graph query..")
++
++        //N/A serve for OUTER JOINS (not removing results having no value)
++        val notAvailable: Vertex = g.addV("notAvailable").property("name", "N/A").next()
++
++        val query:GraphTraversal<Vertex, Map<String,String>> = g.V().match<String>(
++            As<String>("mftType").out("hasManTransfer").`as`("manTransfer"),
++            As<String>("manTransfer").out("hasSender").`as`("senderManEnv"),
++            As<String>("manTransfer").out("hasReceiver").`as`("receiverManEnv"),
++            As<String>("senderManEnv").out("hasMandator").`as`("senderMandator"),
++            As<String>("senderManEnv").out("hasEnvironment").`as`("senderEnvironment"),
++            As<String>("receiverManEnv").out("hasMandator").`as`("receiverMandator"),
++            As<String>("receiverManEnv").out("hasEnvironment").`as`("receiverEnvironment"),
++            As<String>("mftType").out("hasSenderComponent").`as`("senderComponent"),
++            As<String>("mftType").out("hasReceiverComponent").`as`("receiverComponent")
++        )
++            //Receiver server group
++            .match<String>(
++                As<String>("receiverComponent").coalesce(out("deployedOn"), g.V(notAvailable.id()))
++                    .`as`("receiverServerGroup"),
++                As<String>("receiverServerGroup").coalesce(out("restrictedManEnv"), g.V(notAvailable.id()))
++                    .or(where<String>(P.eq("receiverManEnv")), hasLabel<String>("notAvailable"))
++            )
++            .select<String>("receiverServerGroup").`as`("receiverServerGroup")
++
++            //Receiver server
++            .coalesce(As<String>("receiverServerGroup").out("hasServer"), g.V(notAvailable.id())).`as`("receiverServer")
++
++            //Sender server group
++            .match<String>(
++                As<String>("senderComponent").coalesce(out("deployedOn"), g.V(notAvailable.id()))
++                    .`as`("senderServerGroup"),
++                As<String>("senderServerGroup").coalesce(out("restrictedManEnv"), g.V(notAvailable.id()))
++                    .or(where<String>(P.eq("senderManEnv")), hasLabel<String>("notAvailable"))
++            ).select<String>("senderServerGroup").`as`("senderServerGroup")
++
++            //Sender server
++            .coalesce(As<String>("senderServerGroup").out("hasServer"), g.V(notAvailable.id())).`as`("senderServer")
++
++            //Select a postScript by priority, restrict by given restrictions
++            .coalesce(
++                //First priority is postscript related to mftType
++                match<String, Vertex>(
++                    As<String>("mftType").`out`("hasPostScript").`as`("postScript"),
++                    As<String>("postScript").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
++                    As<String>("postScript").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
++                    As<String>("postScript").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
++                ).select("postScript"),
++                //Second priority is postscript related to receiverComponent which can be restricted to mandator/environment/serverGroup
++                match<String, Vertex>(
++                    As<String>("receiverComponent").`out`("hasPostScript").`as`("postScript"),
++                    As<String>("postScript").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
++                    As<String>("postScript").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
++                    As<String>("postScript").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
++                ).select("postScript"),
++                //No postscript defined
++                g.V(notAvailable.id())
++            ).`as`("postScript")
++
++            //Select a postScriptParams by priority, restrict by given restrictions
++            .coalesce(
++                //First priority is postScriptParams related to mftType
++                match<String, Vertex>(
++                    As<String>("mftType").`out`("hasPostScriptParams").`as`("postScriptParams"),
++                    As<String>("postScriptParams").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
++                    As<String>("postScriptParams").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
++                    As<String>("postScriptParams").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
++                ).select("postScriptParams"),
++                //Second priority is postScriptParams related to receiverComponent which can be restricted to mandator/environment/serverGroup
++                match<String, Vertex>(
++                    As<String>("receiverComponent").`out`("hasPostScriptParams").`as`("postScriptParams"),
++                    As<String>("postScriptParams").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
++                    As<String>("postScriptParams").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
++                    As<String>("postScriptParams").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
++                ).select("postScriptParams"),
++                //No postscript defined
++                g.V(notAvailable.id())
++            ).`as`("postScriptParams")
++
++            //Select a receiverDirectory by priority, restrict by given restrictions
++            .coalesce(
++                //First priority is receiverDirectory related to mftType
++                match<String, Vertex>(
++                    As<String>("mftType").`out`("hasReceiverDirectory").`as`("receiverDirectory"),
++                    As<String>("receiverDirectory").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
++                    As<String>("receiverDirectory").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
++                    As<String>("receiverDirectory").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
++                ).select("receiverDirectory"),
++                //Second priority is receiverDirectory related to receiverComponent which can be restricted to mandator/environment/serverGroup
++                match<String, Vertex>(
++                    As<String>("receiverComponent").`out`("hasReceiverDirectory").`as`("receiverDirectory"),
++                    As<String>("receiverDirectory").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
++                    As<String>("receiverDirectory").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
++                    As<String>("receiverDirectory").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
++                ).select("receiverDirectory"),
++                //No postscript defined
++                g.V(notAvailable.id())
++            ).`as`("receiverDirectory")
++
++            //Select a receiverUID by priority, restrict by given restrictions
++            .coalesce(
++                //receiverUID related to receiverComponent which can be restricted to mandator/environment/serverGroup
++                match<String, Vertex>(
++                    As<String>("receiverComponent").`out`("hasUID").`as`("receiverUID"),
++                    As<String>("receiverUID").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
++                    As<String>("receiverUID").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
++                    As<String>("receiverUID").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
++                ).select("receiverUID"),
++                //No postscript defined
++                g.V(notAvailable.id())
++            ).`as`("receiverUID")
++
++            //Select a senderUID by priority, restrict by given restrictions
++            .coalesce(
++                //senderUID related to receiverComponent which can be restricted to mandator/environment/serverGroup
++                match<String, Vertex>(
++                    As<String>("senderComponent").`out`("hasUID").`as`("senderUID"),
++                    As<String>("senderUID").coalesce(out("restrictMandator"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverMandator")), hasLabel<String>("notAvailable")),
++                    As<String>("senderUID").coalesce(out("restrictEnvironment"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverEnvironment")), hasLabel<String>("notAvailable")),
++                    As<String>("senderUID").coalesce(out("restrictServerGroup"), g.V(notAvailable.id()))
++                        .or(where<String>(P.eq("receiverServerGroup")), hasLabel<String>("notAvailable"))
++                ).select("senderUID"),
++                //No postscript defined
++                g.V(notAvailable.id())
++            ).`as`("senderUID")
++
++            //Result columns
++            .select<String>(
++                "mftType",
++                "manTransfer",
++                "senderComponent",
++                "senderMandator",
++                "senderEnvironment",
++                "senderServerGroup",
++                "senderServer",
++                "senderUID",
++                "receiverComponent",
++                "receiverMandator",
++                "receiverEnvironment",
++                "receiverServerGroup",
++                "receiverServer",
++                "postScript",
++                "postScriptParams",
++                "receiverDirectory",
++                "receiverUID"
++            ).by("name")
++
++        return query
++    }
++}
+\ No newline at end of file
