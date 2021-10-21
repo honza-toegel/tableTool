@@ -6,7 +6,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.`__`.*
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.slf4j.LoggerFactory
 
-class GraphQueryTableLoader(val g: GraphTraversalSource) {
+class GraphQueryTableLoader(private val g: GraphTraversalSource) {
 
     companion object {
         @Suppress("JAVA_CLASS_ON_COMPANION")
