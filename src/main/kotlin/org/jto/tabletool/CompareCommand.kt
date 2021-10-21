@@ -43,7 +43,7 @@ class CompareCommand : Subcommand("compare", "Compare two data tables (left <> r
         ArgType.Double,
         shortName = "ms",
         description = "Minimum diff score to asses results as equal"
-    ).default(0.95)
+    ).default(1.0)
     val groupByField by option(
         ArgType.String,
         shortName = "gf",
@@ -55,7 +55,7 @@ class CompareCommand : Subcommand("compare", "Compare two data tables (left <> r
         description = "Column list which would be reported, in exact order, by default () "
     )
         .default(
-            "id:Id:i;mftService:Service Name;mftType:ASI File Type;senderServer:Supplier Host;receiverServer:Receiver Host;senderServerGroup:Supplier HostGroup;receiverServerGroup:Receiver HostGroup;postScript:Postprocessing Command;" +
+            "id:Id:ib;mftService:Service Name;mftType:ASI File Type;senderServer:Supplier Host;receiverServer:Receiver Host;senderServerGroup:Supplier HostGroup:i;receiverServerGroup:Receiver HostGroup:i;postScript:Postprocessing Command;" +
                     "postScriptParams:Postprocessing Arguments;receiverDirectory:Receiver Directory;senderUID:Supplier UID;receiverUID:Receiver UID;senderMandator:SUMAN;senderEnvironment:SURTE;receiverMandator:DEMAN;receiverEnvironment:DERTE;" +
                     "instance:Instance;validFrom:Valid From;validTo:Valid To;state:State"
         )
@@ -65,12 +65,16 @@ class CompareCommand : Subcommand("compare", "Compare two data tables (left <> r
         val outputHeaderColumns =
             outputColumns.split(';').map {
                 val parsedColumn = requireNotNull(
-                    "^(\\w+):([\\w\\s]+)(:(i))?$".toRegex().find(it)?.destructured
+                    "^(\\w+):([\\w\\s]+)(:(i[b]?))?$".toRegex().find(it)?.destructured
                 ) { "The column $it in column list must follow the regexp ^(\\w+):([\\w\\s]+)(:(i))?\$" }
                 OutputHeaderColumn(
                     parsedColumn.component1(),
                     parsedColumn.component2(),
-                    parsedColumn.component4().isNotBlank()
+                    parsedColumn.component4().isNotBlank(),
+                    when (parsedColumn.component4().endsWith('b')) {
+                        true -> OutputDisplay.Both
+                        else -> OutputDisplay.NoOutput
+                    }
                 )
             }
 
@@ -80,19 +84,22 @@ class CompareCommand : Subcommand("compare", "Compare two data tables (left <> r
         // Right source table
         val rightTable = loadInputTable(rightInputType, rightInputFile)
 
+        val leftInputName = fileNameWithoutExtension(leftInputFile)
+        val rightInputName = fileNameWithoutExtension(rightInputFile)
+
         // Compare left with right table
-        val result = TableComparator(leftTable, rightTable, setOf(groupByField,"id"),
+        val result = TableComparator(leftTable, rightTable, setOf(groupByField) + outputHeaderColumns.filter { it.ignoredCompare }.map { it.name },
             groupByField, minimumComparableScore
         ).compareTables()
 
         logger.info("Preparing result excel: $outputFile")
         val workbook = StyledWorkbook()
         logger.info("Adding compare left <> right sheet")
-        ComparatorResultExcelWriter(result, outputHeaderColumns, workbook).createCompareResultSheet()
+        ComparatorResultExcelWriter(result, outputHeaderColumns, leftInputName, rightInputName, workbook).createCompareResultSheet()
         logger.info("Adding left file sheet")
-        TableExcelWriter(leftTable, outputHeaderColumns, workbook, fileNameWithoutExtension(leftInputFile), groupByField ).createDefinitionsSheet()
+        TableExcelWriter(leftTable, outputHeaderColumns, workbook, leftInputName, groupByField ).createDefinitionsSheet()
         logger.info("Adding right file sheet")
-        TableExcelWriter(rightTable, outputHeaderColumns, workbook, fileNameWithoutExtension(rightInputFile), groupByField ).createDefinitionsSheet()
+        TableExcelWriter(rightTable, outputHeaderColumns, workbook, rightInputName, groupByField ).createDefinitionsSheet()
 
         logger.info("Writing compare result into file: $outputFile")
         workbook.write(FileOutputStream(outputFile))
@@ -100,20 +107,20 @@ class CompareCommand : Subcommand("compare", "Compare two data tables (left <> r
     }
 
     companion object {
-        fun loadInputTable(inputType: InputType, inputFile: String): Set<Map<String, String>> {
+        fun loadInputTable(inputType: InputType, inputFile: String): Set<Map<String, TableValue>> {
             return when (inputType) {
                 InputType.GraphDefinitionFile -> {
                     val graph: Graph = TinkerGraph.open()
                     val g: GraphTraversalSource = graph.traversal()
                     //Load graph from excel
-                    ExcelGraphLoader(inputFile, g).graphLoadTest()
+                    ExcelGraphLoader(inputFile, g).loadGraph()
                     //Extract data out of graph (can be replaced by groovy to have configurable query)
                     GraphQueryTableLoader(g).extractData()
                 }
                 InputType.Table -> {
-                    ExcelTableLoader(inputFile).graphLoadTest()
+                    ExcelTableLoader(inputFile).loadTableData()
                 }
-            }.mapIndexed { rowIndex, row -> row + ("id" to "$rowIndex") }.toSet()
+            }.mapIndexed { rowIndex, row -> row + ("id" to StringTableValue("$rowIndex")) }.toSet()
         }
     }
 }

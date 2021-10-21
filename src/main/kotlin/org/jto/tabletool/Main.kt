@@ -20,10 +20,16 @@ enum class InputType {
     Table
 }
 
+enum class OutputDisplay {
+    NoOutput,
+    Both
+}
+
 open class OutputHeaderColumn(
     val name: String,
     val alias: String? = name,
-    val ignored: Boolean = false
+    val ignoredCompare: Boolean = false,
+    val ignoredOutputDisplay: OutputDisplay = OutputDisplay.NoOutput
 )
 
 
@@ -33,19 +39,6 @@ fun main(args: Array<String>) {
     parser.subcommands(CompareCommand(), ExtractOnlyCommand())
     parser.parse(args)
 
-    /*    Function.ExtractDefsOnly -> {
-            val workbook = StyledWorkbook()
-
-            TableExcelWriter(
-                definitionsTable,
-                outputHeaderColumns,
-                workbook,
-                "mftDefinitions"
-            ).createDefinitionsSheet()
-
-            workbook.write(FileOutputStream(outputFile))
-        }
-    */
 }
 
 

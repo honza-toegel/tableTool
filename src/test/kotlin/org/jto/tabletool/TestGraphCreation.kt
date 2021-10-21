@@ -1,25 +1,18 @@
 package org.jto.tabletool
 
-import org.apache.commons.collections4.trie.analyzer.StringKeyAnalyzer
 import org.apache.tinkerpop.gremlin.process.traversal.P
-import org.apache.tinkerpop.gremlin.process.traversal.Traversal
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.`__`.*
 import org.apache.tinkerpop.gremlin.structure.Graph
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph
-import org.junit.Test
-
 class TestGraphCreation {
-
-    @Test
     fun testGraphCreation() {
         val graph: Graph = TinkerGraph.open()
         val g: GraphTraversalSource = graph.traversal()
 
-        val notAvailableLabel: String = "notAvailable"
-        val notAvailable: Vertex = g.addV(notAvailableLabel).property("name", "N/A").next()
+    val notAvailable: Vertex = g.addV("notAvailable").property("name", "N/A").next()
 
         val mandator001: Vertex = g.addV("mandator").property("name", "001").next()
         val mandator019: Vertex = g.addV("mandator").property("name", "019").next()

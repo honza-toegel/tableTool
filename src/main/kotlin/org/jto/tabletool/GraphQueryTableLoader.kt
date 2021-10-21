@@ -6,7 +6,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.`__`.*
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.slf4j.LoggerFactory
 
-class GraphQueryTableLoader(private val g: GraphTraversalSource) {
+class GraphQueryTableLoader(val g: GraphTraversalSource) {
 
     companion object {
         @Suppress("JAVA_CLASS_ON_COMPANION")
@@ -14,14 +14,16 @@ class GraphQueryTableLoader(private val g: GraphTraversalSource) {
         private val logger = LoggerFactory.getLogger(javaClass.enclosingClass)
     }
 
-    fun extractData(): Set<Map<String, String>> {
+    fun extractData(): Set<Map<String, TableValue>> {
 
         logger.info("Execute graph query to extract data..")
 
+        //N/A serve for OUTER JOINS (not removing results having no value)
         val notAvailable: Vertex = g.addV("notAvailable").property("name", "N/A").next()
 
         val query = g.V().match<String>(
             As<String>("mftType").out("hasManTransfer").`as`("manTransfer"),
+            //As<String>("mftType").out("restrictedDesan").`as`("restrictedDesan"),
             As<String>("manTransfer").out("hasSender").`as`("senderManEnv"),
             As<String>("manTransfer").out("hasReceiver").`as`("receiverManEnv"),
             As<String>("senderManEnv").out("hasMandator").`as`("senderMandator"),
@@ -165,7 +167,7 @@ class GraphQueryTableLoader(private val g: GraphTraversalSource) {
             ).`as`("senderUID")
 
             //Result columns
-            .select<String>(
+            .select<Vertex>(
                 "mftType",
                 "manTransfer",
                 "senderComponent",
@@ -183,29 +185,30 @@ class GraphQueryTableLoader(private val g: GraphTraversalSource) {
                 "postScriptParams",
                 "receiverDirectory",
                 "receiverUID"
-            ).by("name")
+            )
 
         val queryResult = query.toSet()
 
         logger.info("Query returned ${queryResult.size} results")
 
         queryResult.forEach {
-            logger.debug(it.toString())
-            //it.forEach{ print((it.value as Vertex).value<String>("name")) }
-            //println((it["mftType"] as Vertex).value<String>("name"))
+            logger.debug(it.map { it.value.toStr() }.joinToString (" , "))
         }
 
-        /*
-        val query1 = g.V().match<String>(
-            As<String>("mftType").out("hasManTransfer").`as`("manTransfer")).select<String>("mftType", "manTransfer").by("name")
-        val queryResult1 = query1.toSet()
-        logger.info("Query1 returned ${queryResult1.size} results")
-        queryResult1.forEach {
-            logger.debug(it.toString())
-        }*/
-
-        return queryResult
+        //Remove "N/A" cells
+        return queryResult.map { row -> row.mapNotNull { cell -> when (cell.value.propertyOrEmpty("name") == "N/A") {
+            true -> null
+            false -> cell.key to toTableValue(cell.value)
+        } }.toMap() }.toSet()
 
     }
+
+    private fun toTableValue(vertex: Vertex):TableValue =
+        when ( vertex.property<String>("defaultValue").isPresent )
+        {
+            false -> StringTableValue(vertex.propertyOrEmpty("name"))
+            true -> RegExpTableValue(vertex.propertyOrEmpty("defaultValue"),
+                vertex.propertyOrEmpty("name").toRegex())
+        }
 
 }

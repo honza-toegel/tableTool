@@ -2,17 +2,17 @@ package org.jto.tabletool
 
 import org.apache.poi.ss.usermodel.*
 import org.apache.poi.xssf.usermodel.XSSFColor
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.slf4j.LoggerFactory.getLogger
 import java.io.File
 
 
-
 class ExcelGraphLoader(
     val inputFileName: String,
-    val graphTraversal: GraphTraversalSource)
-{
+    val graphTraversal: GraphTraversalSource
+) {
 
     companion object {
         @Suppress("JAVA_CLASS_ON_COMPANION")
@@ -20,9 +20,9 @@ class ExcelGraphLoader(
         private val logger = getLogger(javaClass.enclosingClass)
     }
 
-    fun graphLoadTest() {
+    fun loadGraph() {
         logger.info("Loading input excel $inputFileName into graph")
-        val workbook: Workbook = WorkbookFactory.create(File(inputFileName))
+        val workbook: Workbook = WorkbookFactory.create(File(inputFileName), null, true)
         for (sheet: Sheet in workbook.filter { it.sheetName.startsWith("~") }) {
             logger.info("Loading sheet: ${sheet.sheetName}")
             loadVertexFromSheet(sheet, graphTraversal)
@@ -82,22 +82,11 @@ class ExcelGraphLoader(
 
             for (row: Row in sheet.drop(2)) {
                 logger.info(row.joinToString(" | ", "| ", " |") { it.getCellStringValue().replaceNewLines() })
-
-                val mainVertexName = row.getCellStringValue( mainVertexInfo.colIndex)
-                val mainVertex = searchOrCreateNamedVertex(g, mainVertexInfo.labels, mainVertexName)
-                relatedVertexInfos.forEach { relatedVertexInfo ->
-                    val relatedVertexNames = row.getCellStringValue(relatedVertexInfo.colIndex)
-                    if (!relatedVertexNames.isBlank()) {
-                        //Related cells can have one or more values split by newline or coma (coma can be escaped by \,)
-                        for (relatedVertexName in relatedVertexNames.split("(?<!\\\\)[;\\n]".toRegex())
-                            .map { it.replace("\\;", ";") }) {
-                            val relatedVertex = searchOrCreateNamedVertex(g, relatedVertexInfo.labels, relatedVertexName)
-                            when (relatedVertexInfo.relationType) {
-                                VertexRelationType.InRelation ->
-                                    g.addE(relatedVertexInfo.edgeLabel).from(relatedVertex).to(mainVertex).iterate()
-                                VertexRelationType.OutRelation ->
-                                    g.addE(relatedVertexInfo.edgeLabel).from(mainVertex).to(relatedVertex).iterate()
-                            }
+                row.getCell(mainVertexInfo.colIndex)?.parseVertexData()?.forEach { mainVertexData ->
+                    val mainVertex = searchOrCreateNamedVertex(g, mainVertexInfo.labels, mainVertexData)
+                    relatedVertexHeaders.forEach { relatedVertexInfo ->
+                        row.getCell(relatedVertexInfo.colIndex)?.parseVertexData()?.forEach { relatedVertex ->
+                            processRelatedVertex(relatedVertex, g, relatedVertexInfo, mainVertex)
                         }
                     }
                 }
@@ -105,26 +94,44 @@ class ExcelGraphLoader(
         }
     }
 
-    private fun searchOrCreateNamedVertex(g: GraphTraversalSource, defaultVertexLabels: List<VertexLabel>, vertexLabelName: String): Vertex {
-        val vertexNameMatch = requireNotNull("((\\w+):)?(.*)$".toRegex().find(vertexLabelName))
-            {"Vertex name: '$vertexLabelName' doesn't adhere regexp '((\\w+):)?.*\\$'"}
-        val vertexLabel = vertexNameMatch.destructured.component2() //Optional label
-        val vertexName = vertexNameMatch.destructured.component3().replace("\\:", ":")
+    private fun processRelatedVertex(
+        relatedVertexData: VertexData,
+        g: GraphTraversalSource,
+        relatedVertexInfo: RelatedHeaderVertex,
+        mainVertex: Vertex
+    ) {
+        val relatedVertex = searchOrCreateNamedVertex(g, relatedVertexInfo.labels, relatedVertexData)
+        when (relatedVertexInfo.relationType) {
+            VertexRelationType.InRelation ->
+                g.addE(relatedVertexInfo.edgeLabel).from(relatedVertex).to(mainVertex).iterate()
+            VertexRelationType.OutRelation ->
+                g.addE(relatedVertexInfo.edgeLabel).from(mainVertex).to(relatedVertex).iterate()
+        }
+    }
+
+    private fun searchOrCreateNamedVertex(
+        g: GraphTraversalSource,
+        defaultVertexLabels: List<VertexLabel>,
+        vertexData: VertexData
+    ): Vertex {
+        val vertexLabel = vertexData.label
+        val vertexName = vertexData.name
         val vertexLabels = defaultVertexLabels.filter {
             when (vertexLabel.isNotBlank()) {
                 true -> it.alias == vertexLabel || it.label == vertexLabel
                 false -> true
             }
         }
-        require(vertexLabels.isNotEmpty()) {"No vertex labels left in order to search/create vertex after filtering by '$vertexLabel', extracted from: '$vertexLabelName'. Check the list of defined labels $defaultVertexLabels with the given name: '$vertexLabelName'"}
+        require(vertexLabels.isNotEmpty()) { "No vertex labels left in order to search/create vertex after filtering by '$vertexLabel', extracted from: '$vertexData'. Check the list of defined labels $defaultVertexLabels with the given name: '$vertexData'" }
         vertexLabels.forEach {
             val existingVertex = g.V().hasLabel(it.label).has("name", vertexName)
             if (existingVertex.hasNext())
                 return existingVertex.next()
         }
         val singleVertexLabel = requireNotNull(vertexLabels.singleOrNull())
-            {"Please use one of the vertex labels $vertexLabels as prefix before actual vertex name '$vertexLabelName' in order to create new vertex. If you like to re-use existing vertex, check the vertex label/name '$vertexLabelName' because it was not found"}.label
-        return g.addV(singleVertexLabel).property("name", vertexName).next()
+            { "Please use one of the vertex labels $vertexLabels as prefix before actual vertex '$vertexData' in order to create new vertex. If you like to re-use existing vertex, check the vertex label/name '$vertexData' because it was not found" }.label
+
+        return g.addV(singleVertexLabel).property("name", vertexName).updateVertexProperties(vertexData.attributes).next()
     }
 
 }

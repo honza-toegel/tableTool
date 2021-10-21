@@ -24,4 +24,4 @@ class RelatedHeaderVertex(colIndex:Int, labels:String, edgeLabel:String, val rel
     override fun toString() = "relationType $relationType edge: $edgeLabel vertex label(s): $labels"
 }
 
-class VertexSheetHeader (val mainVertexInfo: MainHeaderVertex, val relatedVertexInfos: List<RelatedHeaderVertex>)
+class VertexSheetHeader (val mainVertexInfo: MainHeaderVertex, val relatedVertexHeaders: List<RelatedHeaderVertex>)

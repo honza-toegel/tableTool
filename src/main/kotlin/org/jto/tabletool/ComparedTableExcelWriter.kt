@@ -7,18 +7,30 @@ import org.slf4j.LoggerFactory
 
 class IgnoredOutputHeaderColumn(
     col: OutputHeaderColumn,
-    val ignoredDisplayLeft: Boolean //Indicate if the left value should be displayed on ignored column, or right value
-) : OutputHeaderColumn(col.name, col.alias, col.ignored)
+    val ignoredDisplayLeft: Boolean //Indicate if the left value should be displayed on ignoredCompare column, or right value
+) : OutputHeaderColumn(col.name, col.alias, col.ignoredCompare)
 
 class ComparatorResultExcelWriter(
     private val compareResult: Map<String, List<RowCompareResult>>,
     headerColumns: List<OutputHeaderColumn>,
-    private val wb: StyledWorkbook
+    private val leftName: String,
+    private val rightName: String,
+    private val wb: StyledWorkbook,
+    private val sortByFileds: List<String> = listOf("senderEnvironment", "receiverEnvironment", "senderMandator", "receiverMandator", "senderServer", "receiverServer")
 ) {
+    //private val leftShortcut = leftName.substring(0..1)
+    //private val rightShortcut = rightName.substring(0..1)
 
     private val headerColumns: List<OutputHeaderColumn> = headerColumns.flatMap {
-        when (it.ignored) {
-            true -> listOf(IgnoredOutputHeaderColumn(it, true), IgnoredOutputHeaderColumn(it, false))
+        when (it.ignoredCompare) {
+            true ->
+                when (it.ignoredOutputDisplay) {
+                    OutputDisplay.Both -> listOf(
+                        IgnoredOutputHeaderColumn(it, true),
+                        IgnoredOutputHeaderColumn(it, false)
+                    )
+                    OutputDisplay.NoOutput -> emptyList()
+                }
             false -> listOf(it)
         }
     }
@@ -42,8 +54,10 @@ class ComparatorResultExcelWriter(
 
     private fun createDataRows(sheet: Sheet, headerOffset: Int) {
         with(sheet) {
+            val sortBySelectors = sortByFileds.map<String, (RowCompareResult) -> String?> { sortByField -> {it.cells[sortByField]?.toSortByString()} }
+            val sortByCriteria = compareBy(*sortBySelectors.toTypedArray())
             compareResult.keys.sorted().forEach { key ->
-                compareResult[key]?.forEach { rowCompareResult ->
+                compareResult[key]?.sortedWith(sortByCriteria)?.forEach { rowCompareResult ->
                     with(createRow(lastRowNum + 1)) {
                         createDataRowHeaderCell(createCell(0), rowCompareResult)
                         createDataRowDataCells(rowCompareResult, this, headerOffset)
@@ -84,12 +98,23 @@ class ComparatorResultExcelWriter(
                     cellStyle = wb.styles["rightOnly"]
                 }
                 RowCompareDisplay.LeftRightCompared -> {
-                    when (rowCompareResult.comparableScore == 1.0) {
+                    when (rowCompareResult.totalScore == 1.0) {
                         true -> {
-                            setCellValue("= tp:${rowCompareResult.totalPoints} cs:${rowCompareResult.comparableScore} ts:${rowCompareResult.totalScore}"); cellStyle = wb.styles["normal"]
+                            setCellValue("=")
+                            setCellComment(
+                                "Comparator",
+                                "Total points:${rowCompareResult.totalPoints}\nComparable score:${rowCompareResult.totalScore}"
+                            )
+                            cellStyle = wb.styles["normal"]
+
                         }
                         false -> {
-                            setCellValue("~"); cellStyle = wb.styles["comparable"]
+                            setCellValue("~")
+                            setCellComment(
+                                "Comparator",
+                                "Total points:${rowCompareResult.totalPoints}\nComparable score:${rowCompareResult.totalScore}"
+                            )
+                            cellStyle = wb.styles["comparable"]
                         }
                     }
                 }
@@ -119,9 +144,41 @@ class ComparatorResultExcelWriter(
             if (cellCompareResult != null) {
                 setDataCellStyle(resultCell, outputHeaderColumn, rowCompareResult, cellCompareResult)
                 setDataCellValue(resultCell, outputHeaderColumn, rowCompareResult, cellCompareResult)
+                setDataCellComment(resultCell, outputHeaderColumn, rowCompareResult, cellCompareResult)
             } else {
                 setCellValue("")
             }
+        }
+    }
+
+    private fun setDataCellComment(
+        cell: Cell,
+        outputHeaderColumn: OutputHeaderColumn,
+        rowCompareResult: RowCompareResult,
+        cellCompareResult: CellCompareResult
+    ) {
+        with(cellCompareResult) {
+            val value: String = when (outputHeaderColumn.ignoredCompare) {
+                true -> ""
+                false -> when (rowCompareResult.display) {
+                    RowCompareDisplay.LeftOnly -> ""
+                    RowCompareDisplay.RightOnly -> ""
+                    RowCompareDisplay.LeftRightCompared -> {
+                        //"cr:${cellCompareResult.compareResult}"
+                        when (display) {
+                            CellCompareDisplay.Comparable -> when (cellCompareResult.compareResult == 1.0) {
+                                true -> ""
+                                false -> "$leftName: '$leftValue'\n$rightName: '$rightValue'"
+                            }
+                            CellCompareDisplay.LeftOnly -> ""
+                            CellCompareDisplay.RightOnly -> ""
+                            else -> ""
+                        }
+                    }
+                }
+            }
+            if (value.isNotBlank())
+                cell.setCellComment("Comparator", "$value\ncr:${cellCompareResult.compareResult}" )
         }
     }
 
@@ -131,26 +188,32 @@ class ComparatorResultExcelWriter(
         rowCompareResult: RowCompareResult,
         cellCompareResult: CellCompareResult
     ) {
-        with (cellCompareResult) {
-            val value = when (outputHeaderColumn.ignored) {
+        with(cellCompareResult) {
+            val leftVal:TableValue = leftValue ?: StringTableValue.Empty
+            val rightVal:TableValue = rightValue ?: StringTableValue.Empty
+            val value:Any = when (outputHeaderColumn.ignoredCompare) {
                 true -> when ((outputHeaderColumn as IgnoredOutputHeaderColumn).ignoredDisplayLeft) {
-                    true ->  when (rowCompareResult.display) {
+                    true -> when (rowCompareResult.display) {
                         RowCompareDisplay.RightOnly -> ""
-                        else -> leftValue ?: ""
+                        else -> leftVal
                     }
                     false -> when (rowCompareResult.display) {
                         RowCompareDisplay.LeftOnly -> ""
-                        else -> rightValue ?: ""
+                        else -> rightVal
                     }
                 }
                 false -> when (rowCompareResult.display) {
-                    RowCompareDisplay.LeftOnly -> leftValue ?: ""
-                    RowCompareDisplay.RightOnly -> cell.setCellValue(rightValue ?: "")
+                    RowCompareDisplay.LeftOnly -> leftVal
+                    RowCompareDisplay.RightOnly -> rightVal
                     RowCompareDisplay.LeftRightCompared -> {
                         when (display) {
-                            CellCompareDisplay.Comparable -> createComparedRichText(diffTextResult)
-                            CellCompareDisplay.LeftOnly -> leftValue ?: ""
-                            CellCompareDisplay.RightOnly -> rightValue ?: ""
+                            CellCompareDisplay.Comparable -> when ( compareResult > 0.96 ) {
+                                true -> createComparedRichText(diffTextResult)
+                                false -> createLeftRightText(leftVal, rightVal)
+                            }
+                            CellCompareDisplay.LeftOnly -> leftVal
+                            CellCompareDisplay.RightOnly -> rightVal
+                            CellCompareDisplay.Ignored -> leftVal
                             else -> "N/A"
                         }
                     }
@@ -159,10 +222,12 @@ class ComparatorResultExcelWriter(
 
             when (value) {
                 is String -> cell.setCellValue(value)
+                is TableValue -> cell.setCellValue(value.toString())
                 is XSSFRichTextString -> cell.setCellValue(value)
             }
         }
     }
+
 
     private fun setDataCellStyle(
         cell: Cell,
@@ -170,7 +235,7 @@ class ComparatorResultExcelWriter(
         rowCompareResult: RowCompareResult,
         cellCompareResult: CellCompareResult
     ) {
-        cell.cellStyle = when (outputHeaderColumn.ignored) {
+        cell.cellStyle = when (outputHeaderColumn.ignoredCompare) {
             true -> wb.styles["normal"]
             false -> when (rowCompareResult.display) {
                 RowCompareDisplay.LeftOnly -> wb.styles["leftOnly"]
@@ -196,7 +261,9 @@ class ComparatorResultExcelWriter(
         }
     }
 
-    private fun createComparedRichText(diffTextResult: List<DiffMatchPatch.Diff>): XSSFRichTextString {
+    private fun createComparedRichText(
+        diffTextResult: List<DiffMatchPatch.Diff>
+    ): XSSFRichTextString {
         val richText = XSSFRichTextString()
         diffTextResult.forEach {
             richText.append(
@@ -208,6 +275,13 @@ class ComparatorResultExcelWriter(
                 }
             )
         }
+        return richText
+    }
+
+    private fun createLeftRightText(leftVal: TableValue, rightVal: TableValue): XSSFRichTextString {
+        val richText = XSSFRichTextString()
+        richText.append(leftVal.toString(), wb.fonts["underline"])
+        richText.append(rightVal.toString(), wb.fonts["strikeout"])
         return richText
     }
 }

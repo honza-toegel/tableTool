@@ -19,7 +19,7 @@ class ExcelTableLoader(val inputFileName: String) {
             "senderServerGroup",
             "receiverServerGroup",
             "postScript",
-            "postScriptParameters",
+            "postScriptParams",
             "receiverDirectory",
             "senderUID",
             "receiverUID",
@@ -34,9 +34,9 @@ class ExcelTableLoader(val inputFileName: String) {
         )
     }
 
-    fun graphLoadTest(): Set<Map<String, String>> {
+    fun loadTableData(): Set<Map<String, TableValue>> {
         logger.info("Loading input excel $inputFileName as table data")
-        val workbook: Workbook = WorkbookFactory.create(File(inputFileName))
+        val workbook: Workbook = WorkbookFactory.create(File(inputFileName), null, true)
 
         workbook.filterNot { it.sheetName.startsWith("~") }.also {
             if (it.isNotEmpty()) logger.info("Skipping following sheets which doesnt begin with ~ '$it'")
@@ -44,7 +44,7 @@ class ExcelTableLoader(val inputFileName: String) {
         return workbook.filter { it.sheetName.startsWith("~") }.flatMap { loadDataFromSheet(it) }.toSet()
     }
 
-    private fun loadDataFromSheet(sheet: Sheet): Set<Map<String, String>> {
+    private fun loadDataFromSheet(sheet: Sheet): Set<Map<String, TableValue>> {
         logger.info("Loading sheet: ${sheet.sheetName}")
 
         val hasExcelHeader = sheet.firstOrNull()?.firstOrNull()?.stringCellValue?.startsWith('~') ?: false
@@ -54,8 +54,8 @@ class ExcelTableLoader(val inputFileName: String) {
         }
 
         return sheet.drop(1).map {
-            header.mapIndexed { columnIndex, columnName -> columnName to it.getCellStringValue(columnIndex) }.toMap()
-        }.filter { it.values.any { it.isNotBlank() } }.apply {
+            header.mapIndexed { columnIndex, columnName -> columnName to StringTableValue(it.getCellStringValue(columnIndex)) }.toMap()
+        }.filter { it.values.any { it.str.isNotBlank() } }.apply {
             forEach { logger.debug(it.toString()) }
             logger.info("Sheet ${sheet.sheetName} loaded $size rows")
         }.toSet()

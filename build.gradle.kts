@@ -91,6 +91,9 @@ publishing {
 
 dependencies {
     // Align versions of all Kotlin components
+    implementation("com.beust:klaxon:5.5")
+
+    // Align versions of all Kotlin components
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
 
     // Use the Kotlin JDK 8 standard library.

@@ -33,7 +33,7 @@ class ExtractOnlyCommand : Subcommand("extract", "Extract the table data out of 
         description = "Column list which would be reported, in exact order, by default () "
     )
         .default(
-            "id:Id:i;mftService:Service Name;mftType:ASI File Type;senderServer:Supplier Host;receiverServer:Receiver Host;senderServerGroup:Supplier HostGroup;receiverServerGroup:Receiver HostGroup;postScript:Postprocessing Command;" +
+            "id:Id:i;mftService:Service Name;mftType:ASI File Type;senderServer:Supplier Host;receiverServer:Receiver Host;senderServerGroup:Supplier HostGroup:i;receiverServerGroup:Receiver HostGroup:i;postScript:Postprocessing Command;" +
                     "postScriptParams:Postprocessing Arguments;receiverDirectory:Receiver Directory;senderUID:Supplier UID;receiverUID:Receiver UID;senderMandator:SUMAN;senderEnvironment:SURTE;receiverMandator:DEMAN;receiverEnvironment:DERTE;" +
                     "instance:Instance;validFrom:Valid From;validTo:Valid To;state:State"
         )

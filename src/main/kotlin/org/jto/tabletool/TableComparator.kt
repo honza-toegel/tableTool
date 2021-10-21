@@ -3,8 +3,8 @@ package org.jto.tabletool
 import org.bitbucket.cowwoc.diffmatchpatch.DiffMatchPatch
 
 class CellCompareResult(
-    val leftValue: String?,
-    val rightValue: String?,
+    val leftValue: TableValue?,
+    val rightValue: TableValue?,
     val compareResult: Double, //0..1 (0=no match, 1=exact match)
     val diffTextResult: List<DiffMatchPatch.Diff>,
     ignored: Boolean
@@ -23,7 +23,19 @@ class CellCompareResult(
                 CellCompareDisplay.Comparable
     }
 
-
+    /**
+     * Used for sort by criteria
+     */
+    fun toSortByString(): String = when (display) {
+        CellCompareDisplay.NoValue -> ""
+        CellCompareDisplay.Ignored -> leftValue.toString()
+        CellCompareDisplay.RightOnly -> rightValue.toString()
+        CellCompareDisplay.LeftOnly -> leftValue.toString()
+        CellCompareDisplay.Comparable -> when (compareResult == 1.0) {
+            true -> leftValue.toString()
+            false -> "$leftValue$rightValue"
+        }
+    }
 
     override fun toString(): String = when (compareResult == 1.0) {
         true -> "Eq: $leftValue"
@@ -40,7 +52,7 @@ enum class CellCompareDisplay {
 }
 
 enum class RowCompareDisplay {
-    LeftRightCompared, //The two records matches with enough comparableScore, will be displayed as diff of each other
+    LeftRightCompared, //The two records matches with enough totalScore, will be displayed as diff of each other
     LeftOnly,          //The two records not matches, left record should be displayed
     RightOnly          //The two records not matches, left record should be displayed
 }
@@ -48,14 +60,14 @@ enum class RowCompareDisplay {
 class RowCompareResult(
     val cells: Map<String, CellCompareResult>, leftToRight: Boolean, minimumComparableScore: Double
 ) : Comparable<RowCompareResult> {
-    val totalPoints: Double = cells.values.filter { it.display != CellCompareDisplay.Ignored }.sumByDouble { it.compareResult }
-    val comparableScore: Double = totalPoints / cells.values.filter { it.display == CellCompareDisplay.Comparable }.size
-    val totalScore: Double = totalPoints / cells.values.filter { it.display != CellCompareDisplay.Ignored }.size
+    val totalPoints: Double =
+        cells.values.filter { it.display == CellCompareDisplay.Comparable }.sumByDouble { it.compareResult }
+    val totalScore: Double = totalPoints / cells.values.filter { it.display == CellCompareDisplay.Comparable }.size
 
     /**
      * Indicate how should be the result of row compare displayed
      */
-    val display: RowCompareDisplay = when (comparableScore > minimumComparableScore) {
+    val display: RowCompareDisplay = when (totalScore >= minimumComparableScore) {
         true -> RowCompareDisplay.LeftRightCompared
         else -> when (leftToRight) {
             true -> RowCompareDisplay.LeftOnly
@@ -65,28 +77,28 @@ class RowCompareResult(
 
     override fun compareTo(other: RowCompareResult): Int = totalPoints.compareTo(other.totalPoints)
     override fun toString(): String =
-        "Cells: $cells totalPoints: $totalPoints, comparableScore: $comparableScore, totalScore: $totalScore, Display: $display"
+        "totalPoints: $totalPoints, totalScore: $totalScore, Display: $display"
 }
 
 class TableComparator(
-    leftTable: Set<Map<String, String>>,
-    rightTable: Set<Map<String, String>>,
+    leftTable: Set<Map<String, TableValue>>,
+    rightTable: Set<Map<String, TableValue>>,
     val ignoredColumns: Set<String>,
     val groupByField: String = "mftType",
     val minimumComparableScore: Double = 0.8
 ) {
 
-    val leftTables: Map<String, Set<Map<String, String>>> =
-        leftTable.groupBy { (it[groupByField] ?: "") }.map { it.key to it.value.toSet() }.toMap()
-    val rightTables: Map<String, Set<Map<String, String>>> =
-        rightTable.groupBy { it[groupByField] ?: "" }.map { it.key to it.value.toSet() }.toMap()
+    private val leftTables: Map<String, Set<Map<String, TableValue>>> =
+        leftTable.groupBy { it[groupByField].toString() }.map { it.key to it.value.toSet() }.toMap()
+    private val rightTables: Map<String, Set<Map<String, TableValue>>> =
+        rightTable.groupBy { it[groupByField].toString() }.map { it.key to it.value.toSet() }.toMap()
 
     fun compareTables(): Map<String, List<RowCompareResult>> =
         (leftTables.keys + rightTables.keys).map {
             it to
                     compareGroupedTables(
-                        leftTables[it] ?: setOf(mapOf(groupByField to it)),
-                        rightTables[it] ?: setOf(mapOf(groupByField to ""))
+                        leftTables[it] ?: setOf(mapOf(groupByField to StringTableValue(it))),
+                        rightTables[it] ?: setOf(mapOf(groupByField to StringTableValue(it)))
                     )
                         .sortedWith(compareBy { it.totalPoints })
         }.toMap()
@@ -98,8 +110,8 @@ class TableComparator(
      *
      */
     private fun compareGroupedTables(
-        leftTable: Set<Map<String, String>>,
-        rightTable: Set<Map<String, String>>
+        leftTable: Set<Map<String, TableValue>>,
+        rightTable: Set<Map<String, TableValue>>
     ): Set<RowCompareResult> {
 
         val leftToRightResults = leftTable.mapNotNull { leftTableRow ->
@@ -111,21 +123,20 @@ class TableComparator(
                         true,
                         minimumComparableScore
                     )
-                }
-                .maxWith(compareBy { it.second })
+                }.maxWith(compareBy { it.second.totalPoints })
         }
         val rightToLeftResults = (rightTable subtract leftToRightResults.map { it.first }).mapNotNull { rightTableRow ->
             leftTable
                 .map { leftTableRow -> compareTableRow(leftTableRow, rightTableRow, false, minimumComparableScore) }
-                .maxWith(compareBy { it })
+                .maxWith(compareBy { it.totalPoints })
         }
 
         return (leftToRightResults.map { it.second } + rightToLeftResults).toSet()
     }
 
     private fun compareTableRow(
-        leftTableRow: Map<String, String>,
-        rightTableRow: Map<String, String>,
+        leftTableRow: Map<String, TableValue>,
+        rightTableRow: Map<String, TableValue>,
         leftToRight: Boolean,
         minimumComparableScore: Double
     ) = RowCompareResult(
@@ -135,21 +146,24 @@ class TableComparator(
     )
 
     private fun compareCellValues(
-        leftValue: String?,
-        rightValue: String?,
+        leftValue: TableValue?,
+        rightValue: TableValue?,
         ignoreCompareResult: Boolean
     ): CellCompareResult {
-        val leftValueNotNull = leftValue ?: ""
-        val rightValueNotNull = rightValue ?: ""
+        val leftValueNotNull:TableValue = leftValue ?: StringTableValue.Empty
+        val rightValueNotNull:TableValue = rightValue ?: StringTableValue.Empty
 
-        val dmp = DiffMatchPatch()
-        val diff = dmp.diffMain(leftValueNotNull, rightValueNotNull, false)
+        val diff = leftValueNotNull.diff(rightValueNotNull)
+        val maxLength = kotlin.math.max(
+            leftValueNotNull.toString().length,
+            rightValueNotNull.toString().length
+        )
         val compareResult = when (ignoreCompareResult) {
-            true -> 0.0 //To be ignored
-            false -> (1.0 - (dmp.diffLevenshtein(diff).toFloat() / kotlin.math.max(
-                leftValueNotNull.length,
-                rightValueNotNull.length
-            )))
+            true -> 0.0 //To be ignoredCompare
+            false -> when (maxLength > 0) {
+                true -> 1.0 - (TableValue.dmp.diffLevenshtein(diff).toFloat() / maxLength)
+                false -> 1.0
+            }
         }
         return CellCompareResult(leftValue, rightValue, compareResult, diff, ignoreCompareResult)
     }
