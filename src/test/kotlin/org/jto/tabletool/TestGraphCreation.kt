@@ -116,8 +116,8 @@ class TestGraphCreation {
             As<String>("mftType").out("senderComponent").`as`("senderComponent"),
             As<String>("mftType").out("receiverComponent").`as`("receiverComponent")
         )
-            .matchServerGroup<Vertex, Map<String, String>, String>("receiver") {naVertex()}
-            .matchServerGroup<Vertex, String, String>("sender") {naVertex()}
+            .matchServerGroup<Vertex, Map<String, String>, String>("receiver")
+            .matchServerGroup<Vertex, String, String>("sender")
 
 
             //Select a postScript by priority, restrict by given restrictions

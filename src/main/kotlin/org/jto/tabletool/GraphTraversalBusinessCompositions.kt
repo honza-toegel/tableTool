@@ -4,18 +4,16 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.structure.Vertex
 
 fun <S, E, E2> GraphTraversal<S, E>.matchServerGroup(
-    prefix: String,
-    naVertex: () -> GraphTraversal<Vertex, Vertex>
+    prefix: String
 ): GraphTraversal<S, E2> {
     return select<E2>("${prefix}Component")
         .match<E2>(
-            matchOutEdgeLabelOptionally("${prefix}Component", "deployedOn", "${prefix}ServerGroup", naVertex),
-            matchOutEdgeLabelOptionally(
+            matchOutEdgeLabel("${prefix}Component", "deployedOn", "${prefix}ServerGroup"),
+            matchOutEdgeLabel(
                 "${prefix}ServerGroup",
                 "restrictedServesManEnv",
-                "${prefix}RestrictedServesManEnv",
-                naVertex
+                "${prefix}RestrictedServesManEnv"
             ),
-            matchSameVertexOptionally("${prefix}RestrictedServesManEnv", "${prefix}ManEnvAppl")
+            matchSameVertex("${prefix}RestrictedServesManEnv", "${prefix}ManEnvAppl")
         ).selectAs("${prefix}ServerGroup")
 }

@@ -85,7 +85,7 @@ class ExcelGraphLoader(
                 row.getCell(mainVertexInfo.colIndex)?.parseVertexData()?.forEach { mainVertexData ->
                     val mainVertex = searchOrCreateNamedVertex(g, mainVertexInfo.labels, mainVertexData)
                     relatedVertexHeaders.forEach { relatedVertexInfo ->
-                        row.getCell(relatedVertexInfo.colIndex)?.parseVertexData()?.forEach { relatedVertex ->
+                        row.getCell(relatedVertexInfo.colIndex).parseVertexData().forEach { relatedVertex ->
                             processRelatedVertex(relatedVertex, g, relatedVertexInfo, mainVertex)
                         }
                     }
