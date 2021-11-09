@@ -7,7 +7,10 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.`__`.*
 import org.apache.tinkerpop.gremlin.structure.Graph
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph
+import org.junit.Test
+
 class TestGraphCreation {
+    @Test
     fun testGraphCreation() {
         val graph: Graph = TinkerGraph.open()
         val g: GraphTraversalSource = graph.traversal()

@@ -2,6 +2,7 @@ package org.jto.tabletool
 
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.structure.Vertex
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.`__`.or
 
 fun <S, E, E2> GraphTraversal<S, E>.matchServerGroup(
     prefix: String
@@ -13,7 +14,11 @@ fun <S, E, E2> GraphTraversal<S, E>.matchServerGroup(
                 "${prefix}ServerGroup",
                 "restrictedServesManEnv",
                 "${prefix}RestrictedServesManEnv"
-            ),
-            matchSameVertex("${prefix}RestrictedServesManEnv", "${prefix}ManEnvAppl")
+            )
+        ).match<E2>(
+            or<Vertex> (
+                matchNotAvailableVertex("${prefix}RestrictedServesManEnv"),
+                matchSameVertex("${prefix}RestrictedServesManEnv", "${prefix}ManEnvAppl")
+            )
         ).selectAs("${prefix}ServerGroup")
 }

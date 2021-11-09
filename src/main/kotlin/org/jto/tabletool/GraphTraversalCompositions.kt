@@ -31,10 +31,21 @@ fun matchOutEdgeLabel(
 fun matchSameVertex(
     sourceAlias: String,
     destinationAlias: String
-): GraphTraversal<String, String> = As<String>(sourceAlias).where(P.eq(destinationAlias))
+): GraphTraversal<String, String> = As<String>(sourceAlias).where(P.eq<String>(destinationAlias))
 
+/*fun matchSameVertexOptionaly(
+    sourceAlias: String,
+    destinationAlias: String,
+    notAvailableLabel: String = "notAvailable"
+): GraphTraversal<String, String> = As<String>(destinationAlias).where(P.eq<String>(sourceAlias).or(P.eq()))*/
 
-
-
-
+/**
+ * Match all traversals where source vertex is same as destination vertex      (source -> destination)
+ * adding all traversals where source vertex is not same as destination vertex (source -> na)
+ */
+fun matchNotAvailableVertex(
+    sourceAlias: String,
+    notAvailableLabel: String = "notAvailable"
+): GraphTraversal<String, String> =
+    As<String>(sourceAlias).hasLabel(notAvailableLabel)
 
