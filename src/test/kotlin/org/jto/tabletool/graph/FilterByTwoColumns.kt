@@ -1,9 +1,7 @@
-package org.jto.tabletool.JGraphUtilsTest
+package org.jto.tabletool.graph
 
-import org.junit.Assert
 import org.junit.Test
 import kotlin.test.assertEquals
-import org.jto.tabletool.graph.filterByTwoColumns;
 
 class FilterByTwoColumns {
     @Test

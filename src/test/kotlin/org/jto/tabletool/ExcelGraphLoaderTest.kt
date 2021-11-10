@@ -1,7 +1,7 @@
 package org.jto.tabletool
 
 import org.jgrapht.Graph
-import org.jgrapht.graph.DefaultDirectedGraph
+import org.jgrapht.graph.DirectedPseudograph
 import org.jto.tabletool.graph.Edge
 import org.jto.tabletool.graph.Vertex
 import org.jto.tabletool.graph.findVerticesByEdge
@@ -14,7 +14,7 @@ class ExcelGraphLoaderTest {
     @Test
     fun testExcelGraphLoader() {
 
-        val g: Graph<Vertex, Edge> = DefaultDirectedGraph(Edge::class.java)
+        val g: Graph<Vertex, Edge> = DirectedPseudograph(Edge::class.java)
 
         val testFile = ExcelGraphLoaderTest::class.java.getResource("/test.xlsx").file
         ExcelGraphLoader(testFile, g).loadGraph()

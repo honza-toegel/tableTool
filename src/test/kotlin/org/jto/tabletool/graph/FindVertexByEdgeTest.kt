@@ -1,15 +1,14 @@
-package org.jto.tabletool.JGraphUtilsTest
+package org.jto.tabletool.graph
 
-import org.jgrapht.graph.DefaultDirectedGraph
+import org.jgrapht.graph.DirectedPseudograph
 import org.jgrapht.graph.DefaultEdge
-import org.jto.tabletool.graph.findVerticesByEdge
 import org.junit.Assert
 import org.junit.Test
 
 class FindVertexByEdgeTest {
     @Test
     fun findVertexByEdge_when_hasEmptyGraph_then_expectEmptyResult() {
-        val graph = DefaultDirectedGraph<String, DefaultEdge>(DefaultEdge::class.java)
+        val graph = DirectedPseudograph<String, DefaultEdge>(DefaultEdge::class.java)
         Assert.assertEquals(
             emptySet<Map<String, String>>(),
             graph.findVerticesByEdge("a", "b") { edge, source, target -> true })
@@ -17,7 +16,7 @@ class FindVertexByEdgeTest {
 
     @Test
     fun findVertexByEdge_when_hasNonEmptyGraphAndPredicateMatchNothing_then_expectEmptyResult() {
-        val graph = DefaultDirectedGraph<String, DefaultEdge>(DefaultEdge::class.java)
+        val graph = DirectedPseudograph<String, DefaultEdge>(DefaultEdge::class.java)
         graph.addVertex("a")
         graph.addVertex("b")
         graph.addEdge("a", "b")
@@ -28,7 +27,7 @@ class FindVertexByEdgeTest {
 
     @Test
     fun findVertexByEdge_when_hasOneEdgeMatchingPredicate_then_expectOneResult() {
-        val graph = DefaultDirectedGraph<String, DefaultEdge>(DefaultEdge::class.java)
+        val graph = DirectedPseudograph<String, DefaultEdge>(DefaultEdge::class.java)
         graph.addVertex("a")
         graph.addVertex("b")
         val expectedEdge = graph.addEdge("a", "b")
@@ -42,7 +41,7 @@ class FindVertexByEdgeTest {
 
     @Test
     fun findVertexByEdge_when_hasMultipleEdgesAndOnlyOneEdgeMatchingPredicate_then_expectOneResult() {
-        val graph = DefaultDirectedGraph<String, DefaultEdge>(DefaultEdge::class.java)
+        val graph = DirectedPseudograph<String, DefaultEdge>(DefaultEdge::class.java)
         graph.addVertex("a")
         graph.addVertex("b")
         graph.addVertex("c")
@@ -61,7 +60,7 @@ class FindVertexByEdgeTest {
 
     @Test
     fun findVertexByEdge_when_hasMultipleEdgesAndOnlyTwoEdgeMatchingPredicate_then_expectTwoResult() {
-        val graph = DefaultDirectedGraph<String, DefaultEdge>(DefaultEdge::class.java)
+        val graph = DirectedPseudograph<String, DefaultEdge>(DefaultEdge::class.java)
         graph.addVertex("a")
         graph.addVertex("b")
         graph.addVertex("c")
@@ -80,7 +79,7 @@ class FindVertexByEdgeTest {
 
     @Test
     fun findVertexByEdge_when_hasMultipleEdgesAndOnlyTwoEdgeMatchingPredicate_then_expectTwoResult2() {
-        val graph = DefaultDirectedGraph<String, DefaultEdge>(DefaultEdge::class.java)
+        val graph = DirectedPseudograph<String, DefaultEdge>(DefaultEdge::class.java)
         graph.addVertex("a")
         graph.addVertex("b")
         graph.addVertex("c")

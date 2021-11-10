@@ -85,7 +85,7 @@ class ExcelGraphLoader(
                 row.getCell(mainVertexInfo.colIndex)?.parseVertexData()?.forEach { mainVertexData ->
                     val mainVertex = searchOrCreateNamedVertex(g, mainVertexInfo.labels, mainVertexData)
                     relatedVertexHeaders.forEach { relatedVertexInfo ->
-                        row.getCell(relatedVertexInfo.colIndex).parseVertexData().forEach { relatedVertex ->
+                        row.getCell(relatedVertexInfo.colIndex)?.parseVertexData()?.forEach { relatedVertex ->
                             processRelatedVertex(relatedVertex, g, relatedVertexInfo, mainVertex)
                         }
                     }
@@ -132,7 +132,7 @@ class ExcelGraphLoader(
         val singleVertexLabel = requireNotNull(vertexLabels.singleOrNull())
         { "Please use one of the vertex labels $vertexLabels as prefix before actual vertex '$vertexData' in order to create new vertex. If you like to re-use existing vertex, check the vertex label/name '$vertexData' because it was not found" }.label
 
-        return Vertex(singleVertexLabel, vertexName).apply {
+        return Vertex(singleVertexLabel, vertexName, vertexData.attributes).apply {
             g.addVertex(this)
         }
     }

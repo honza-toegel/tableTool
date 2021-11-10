@@ -1,6 +1,5 @@
-package org.jto.tabletool.JGraphUtilsTest
+package org.jto.tabletool.graph
 
-import org.jto.tabletool.graph.join
 import org.junit.Assert
 import org.junit.Test
 

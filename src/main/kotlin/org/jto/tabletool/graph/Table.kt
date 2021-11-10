@@ -68,3 +68,9 @@ fun <V> Set<Map<String, V>>.join(
         }
     }.toSet()
 }
+
+fun <V> joinAll(vararg tables: Set<Map<String, V>>): Set<Map<String, V>> {
+    return tables.reduce {
+        acc, set ->  acc.join(set)
+    }
+}

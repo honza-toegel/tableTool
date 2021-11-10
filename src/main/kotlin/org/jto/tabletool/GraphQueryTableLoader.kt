@@ -1,8 +1,7 @@
 package org.jto.tabletool
 
 import org.jgrapht.Graph
-import org.jto.tabletool.graph.Edge
-import org.jto.tabletool.graph.Vertex
+import org.jto.tabletool.graph.*
 import org.slf4j.LoggerFactory
 
 class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
@@ -13,15 +12,53 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
         private val logger = LoggerFactory.getLogger(javaClass.enclosingClass)
     }
 
+    private fun getBaseTable() = joinAll(
+        g.findVerticesByEdgeLabel("mftType", "manTransfer", "hasManTransfer"),
+        g.findVerticesByEdgeLabel("manTransfer", "senderManEnv", "hasSender"),
+        g.findVerticesByEdgeLabel("manTransfer", "receiverManEnv", "hasReceiver"),
+        g.findVerticesByEdgeLabel("senderManEnv", "senderMandator", "hasMandator"),
+        g.findVerticesByEdgeLabel("senderManEnv", "senderEnvironment", "hasEnvironment"),
+        g.findVerticesByEdgeLabel("receiverManEnv", "receiverMandator", "hasMandator"),
+        g.findVerticesByEdgeLabel("receiverManEnv", "receiverEnvironment", "hasEnvironment"),
+        g.findVerticesByEdgeLabel("mftType", "senderComponent", "hasSenderComponent"),
+        g.findVerticesByEdgeLabel("mftType", "receiverComponent", "hasReceiverComponent")
+    )
+
+    private fun getServerGroup(prefix: String) = joinAll(
+        //This is optional relation -> not all Components are listed by edge ServerGroup
+        g.findVerticesByEdgeLabel("${prefix}Component", "${prefix}ServerGroup", "deployedOn"),
+        g.findVerticesByEdgeLabel("${prefix}ServerGroup", "${prefix}RestrictedManEnv", "restrictedManEnv")
+    )
+
+    private fun Set<Map<String, Vertex>>.filterOutByRestrictedManEnv(prefix: String): Set<Map<String, Vertex>> =
+        filterByTwoColumns(
+            "${prefix}ManEnv",
+            "${prefix}RestrictedManEnv"
+        ) { manEnv, restrictedManEnv ->
+            manEnv == null || restrictedManEnv == null || manEnv.name == restrictedManEnv.name
+        }
+
     fun extractData(): Set<Map<String, TableValue>> {
 
         logger.info("Execute graph query to extract data..")
 
-        //N/A serve for OUTER JOINS (not removing results having no value)
-        val notAvailable: Vertex = Vertex("notAvailable", "N/A").apply { g.addVertex(this) }
+        val result = getBaseTable()
+            .join(getServerGroup("receiver")).filterOutByRestrictedManEnv("receiver")
+            .join(getServerGroup("sender")).filterOutByRestrictedManEnv("sender")
 
-        return emptySet()
+        return result
+            .map { row ->
+                row.map { valEntry ->
+                    valEntry.key to valEntry.value.toTableValue()
+                }.toMap()
+            }.toSet()
     }
+
+    private fun Vertex.toTableValue(): TableValue =
+        when (properties.contains("defaultValue")) {
+            false -> StringTableValue(name)
+            true -> RegExpTableValue(properties["defaultValue"]!!, name.toRegex())
+        }
     /*
     val query = g.V().match<String>(
         As<String>("mftType").out("hasManTransfer").`as`("manTransfer"),

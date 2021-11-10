@@ -2,7 +2,7 @@ package org.jto.tabletool
 
 import kotlinx.cli.*
 import org.jgrapht.Graph
-import org.jgrapht.graph.DefaultDirectedGraph
+import org.jgrapht.graph.DirectedPseudograph
 import org.jto.tabletool.graph.Edge
 import org.jto.tabletool.graph.Vertex
 import org.slf4j.LoggerFactory
@@ -111,7 +111,7 @@ class CompareCommand : Subcommand("compare", "Compare two data tables (left <> r
         fun loadInputTable(inputType: InputType, inputFile: String): Set<Map<String, TableValue>> {
             return when (inputType) {
                 InputType.GraphDefinitionFile -> {
-                    val g: Graph<Vertex, Edge> = DefaultDirectedGraph(Edge::class.java)
+                    val g: Graph<Vertex, Edge> = DirectedPseudograph(Edge::class.java)
                     //Load graph from excel
                     ExcelGraphLoader(inputFile, g).loadGraph()
                     //Extract data out of graph (can be replaced by groovy to have configurable query)
