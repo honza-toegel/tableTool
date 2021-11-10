@@ -1,48 +1,52 @@
 package org.jto.tabletool
 
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
-import org.apache.tinkerpop.gremlin.structure.Graph
-import org.apache.tinkerpop.gremlin.structure.Vertex
-import org.apache.tinkerpop.gremlin.structure.VertexProperty
-import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph
+import org.jgrapht.Graph
+import org.jgrapht.graph.DefaultDirectedGraph
+import org.jto.tabletool.graph.Edge
+import org.jto.tabletool.graph.Vertex
+import org.jto.tabletool.graph.findVerticesByEdge
+import org.jto.tabletool.graph.join
+import org.junit.Assert
 import org.junit.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class ExcelGraphLoaderTest {
     @Test
     fun testExcelGraphLoader() {
-        val graph: Graph = TinkerGraph.open()
-        val g: GraphTraversalSource = graph.traversal()
+
+        val g: Graph<Vertex, Edge> = DefaultDirectedGraph(Edge::class.java)
 
         val testFile = ExcelGraphLoaderTest::class.java.getResource("/test.xlsx").file
         ExcelGraphLoader(testFile, g).loadGraph()
 
-        val allPersonResult = g.V().hasLabel("person").toSet()
+        val allPersonResult = g.vertexSet().filter { it.label == "person" }.toSet()
         allPersonResult.forEach {
-            println(it.toStr())
+            println(it.toString())
         }
 
-        assertEquals(5, allPersonResult.size)
+        assertEquals(6, allPersonResult.size)
 
-        val result = g.V().match<String>(
-            As<String>("personA").out("hasFriend").`as`("personAFriend"),
-            As<String>("personAFriend").out("marriedWith").`as`("personAFriendMarriedWith")
-        ).select<String>("personA", "personAFriend", "personAFriendMarriedWith").by("name").toSet()
 
-        result.forEach {
-            println(it)
-        }
+        val hasFriend = g.findVerticesByEdge("personA", "personAFriend") { edge -> edge.label == "hasFriend" }
+        val marriedWith =
+            g.findVerticesByEdge("personAFriend", "personAFriendMarriedWith") { edge -> edge.label == "marriedWith" }
 
-        assertEquals(1, result.size)
-        assertEquals(
-            mapOf("personA" to "Leona", "personAFriend" to "Sarah", "personAFriendMarriedWith" to "Paul"),
-            result.iterator().next()
+        val hasFriendWhoIsMarriedWith = hasFriend.join(marriedWith).map{ r -> r.map { v -> v.key to v.value.name }.toMap() }.toSet()
+
+        println(hasFriendWhoIsMarriedWith)
+
+        assertEquals(1, hasFriendWhoIsMarriedWith.size)
+        Assert.assertEquals(
+            setOf(mapOf("personA" to "Leona", "personAFriend" to "Sarah", "personAFriendMarriedWith" to "Paul")),
+            hasFriendWhoIsMarriedWith
         )
+    }
+}
 
         /**
          * Select all persons pets
          */
+        /**
         val personPetResult = g.V().match<Vertex>(
             As<Vertex>("person").out("hasPet").`as`("personsPet")
         ).select<Vertex>("person", "personsPet").toSet()
@@ -73,5 +77,4 @@ class ExcelGraphLoaderTest {
                 )
             )
         )
-    }
-}
+    }**/

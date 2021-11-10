@@ -2,16 +2,16 @@ package org.jto.tabletool
 
 import org.apache.poi.ss.usermodel.*
 import org.apache.poi.xssf.usermodel.XSSFColor
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
-import org.apache.tinkerpop.gremlin.structure.Vertex
+import org.jgrapht.Graph
+import org.jto.tabletool.graph.Edge
+import org.jto.tabletool.graph.Vertex
 import org.slf4j.LoggerFactory.getLogger
 import java.io.File
 
 
 class ExcelGraphLoader(
     val inputFileName: String,
-    val graphTraversal: GraphTraversalSource
+    val graphTraversal: Graph<Vertex, Edge>
 ) {
 
     companion object {
@@ -77,7 +77,7 @@ class ExcelGraphLoader(
         return VertexSheetHeader(mainVertexInfo, relatedVertexInfos)
     }
 
-    private fun loadVertexFromSheet(sheet: Sheet, g: GraphTraversalSource) {
+    private fun loadVertexFromSheet(sheet: Sheet, g: Graph<Vertex, Edge>) {
         with(loadVertexHeaderFromSheet(sheet)) {
 
             for (row: Row in sheet.drop(2)) {
@@ -96,21 +96,21 @@ class ExcelGraphLoader(
 
     private fun processRelatedVertex(
         relatedVertexData: VertexData,
-        g: GraphTraversalSource,
+        g: Graph<Vertex, Edge>,
         relatedVertexInfo: RelatedHeaderVertex,
         mainVertex: Vertex
     ) {
         val relatedVertex = searchOrCreateNamedVertex(g, relatedVertexInfo.labels, relatedVertexData)
         when (relatedVertexInfo.relationType) {
             VertexRelationType.InRelation ->
-                g.addE(relatedVertexInfo.edgeLabel).from(relatedVertex).to(mainVertex).iterate()
+                g.addEdge(relatedVertex, mainVertex, Edge(relatedVertexInfo.edgeLabel))
             VertexRelationType.OutRelation ->
-                g.addE(relatedVertexInfo.edgeLabel).from(mainVertex).to(relatedVertex).iterate()
+                g.addEdge(mainVertex, relatedVertex, Edge(relatedVertexInfo.edgeLabel))
         }
     }
 
     private fun searchOrCreateNamedVertex(
-        g: GraphTraversalSource,
+        g: Graph<Vertex, Edge>,
         defaultVertexLabels: List<VertexLabel>,
         vertexData: VertexData
     ): Vertex {
@@ -123,15 +123,17 @@ class ExcelGraphLoader(
             }
         }
         require(vertexLabels.isNotEmpty()) { "No vertex labels left in order to search/create vertex after filtering by '$vertexLabel', extracted from: '$vertexData'. Check the list of defined labels $defaultVertexLabels with the given name: '$vertexData'" }
-        vertexLabels.forEach {
-            val existingVertex = g.V().hasLabel(it.label).has("name", vertexName)
-            if (existingVertex.hasNext())
-                return existingVertex.next()
+        vertexLabels.forEach { vertexLabel ->
+            val existingVertex =
+                g.vertexSet().filter { v -> v.label == vertexLabel.label && v.name == vertexName }.toSet()
+            if (existingVertex.isNotEmpty())
+                return existingVertex.first()
         }
         val singleVertexLabel = requireNotNull(vertexLabels.singleOrNull())
-            { "Please use one of the vertex labels $vertexLabels as prefix before actual vertex '$vertexData' in order to create new vertex. If you like to re-use existing vertex, check the vertex label/name '$vertexData' because it was not found" }.label
+        { "Please use one of the vertex labels $vertexLabels as prefix before actual vertex '$vertexData' in order to create new vertex. If you like to re-use existing vertex, check the vertex label/name '$vertexData' because it was not found" }.label
 
-        return g.addV(singleVertexLabel).property("name", vertexName).updateVertexProperties(vertexData.attributes).next()
+        return Vertex(singleVertexLabel, vertexName).apply {
+            g.addVertex(this)
+        }
     }
-
 }
