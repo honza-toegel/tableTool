@@ -19,10 +19,17 @@ fun <V> Set<Map<String, V>>.filterByTwoColumns(
         predicate(row[columnName1], row[columnName2])
     }.toSet()
 
+enum class JoinType {
+    Inner,
+    LeftOuter,
+    RightOuter,
+    FullOuter,
+}
+
 /**
  * Find single common label from both tables and join them via this label
  */
-fun <V> Set<Map<String, V>>.join(rightTable: Set<Map<String, V>>): Set<Map<String, V>> {
+fun <V> Set<Map<String, V>>.join(rightTable: Set<Map<String, V>>, joinType: JoinType = JoinType.Inner): Set<Map<String, V>> {
     if (isEmpty() || rightTable.isEmpty())
         return emptySet()
     fun getSingleCommonLabel(): String {
@@ -36,16 +43,19 @@ fun <V> Set<Map<String, V>>.join(rightTable: Set<Map<String, V>>): Set<Map<Strin
     }
 
     val label = getSingleCommonLabel()
-    return join(label, label, label, rightTable)
+    return join(label, label, label, rightTable, joinType)
 }
 
 fun <V> Set<Map<String, V>>.join(
     leftLabel: String,
     rightLabel: String,
     resultLabel: String,
-    rightTable: Set<Map<String, V>>
+    rightTable: Set<Map<String, V>>,
+    joinType: JoinType = JoinType.Inner
 ): Set<Map<String, V>> {
-    return flatMap<Map<String, V>, Map<String, V>> { leftRow ->
+    val leftMatchedRows = mutableSetOf<Map<String,V>>()
+    val rightMatchedRows = mutableSetOf<Map<String,V>>()
+    val innerJoinResult = flatMap<Map<String, V>, Map<String, V>> { leftRow ->
         if (!leftRow.containsKey(leftLabel)) emptySet()
         else {
             val rightRows = rightTable.filter { rightRow -> rightRow[rightLabel] == leftRow[leftLabel] }
@@ -53,9 +63,11 @@ fun <V> Set<Map<String, V>>.join(
             rightRows.map { rightRow ->
                 val commonLabels = leftRow.keys.intersect(rightRow.keys)
                 //There must be always only one column used for join
-                if ((leftLabel == rightLabel && commonLabels.size == 1) || (leftLabel != rightLabel && commonLabels.isEmpty()))
+                if ((leftLabel == rightLabel && commonLabels.size == 1) || (leftLabel != rightLabel && commonLabels.isEmpty())) {
+                    leftMatchedRows += leftRow
+                    rightMatchedRows += rightRow
                     mapOf(resultLabel to matchedValue) + leftRow.filter { it.key != leftLabel } + rightRow.filter { it.key != rightLabel }
-                else
+                } else {
                     throw IllegalArgumentException(
                         String.format(
                             "Table is inconsistent, there is %d of same labels in left row %s and right row %s",
@@ -64,9 +76,16 @@ fun <V> Set<Map<String, V>>.join(
                             rightRows.toString()
                         )
                     )
+                }
             }
         }
     }.toSet()
+    return when (joinType) {
+        JoinType.Inner -> innerJoinResult
+        JoinType.LeftOuter -> innerJoinResult + (this - leftMatchedRows)
+        JoinType.RightOuter -> innerJoinResult + (rightTable - rightMatchedRows)
+        JoinType.FullOuter -> innerJoinResult + (this - leftMatchedRows) + (rightTable - rightMatchedRows)
+    }
 }
 
 fun <V> joinAll(vararg tables: Set<Map<String, V>>): Set<Map<String, V>> {

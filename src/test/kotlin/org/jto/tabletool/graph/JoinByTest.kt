@@ -82,4 +82,64 @@ class JoinByTest {
         val table2 = setOf(mapOf("ax" to "a1", "c" to "c3"), mapOf("ax" to "a2", "bbbb" to "c4"))
         table1.join("ax", "ax", "c", table2)
     }
+
+    @Test
+    fun when_2MatchAnd1LeftOuterJoin_thenExpect_threeResults() {
+        val table1 = setOf(
+            mapOf("a" to "a1", "b" to "c2"),
+            mapOf("a" to "aX", "b" to "**")
+        )
+        val table2 = setOf(
+            mapOf("a" to "a1", "c" to "c3"),
+            mapOf("a" to "a1", "c" to "c4"),
+            mapOf("a" to "aZ", "b" to "@@")
+        )
+        Assert.assertEquals(
+            setOf(
+                mapOf("a" to "a1", "b" to "c2", "c" to "c3"),
+                mapOf("a" to "a1", "b" to "c2", "c" to "c4"),
+                mapOf("a" to "aX", "b" to "**")
+            ), table1.join(table2, JoinType.LeftOuter)
+        )
+    }
+
+    @Test
+    fun when_2MatchAnd1RightOuterJoin_thenExpect_threeResults() {
+        val table1 = setOf(
+            mapOf("a" to "a1", "b" to "c2"),
+            mapOf("a" to "aX", "b" to "**")
+        )
+        val table2 = setOf(
+            mapOf("a" to "a1", "c" to "c3"),
+            mapOf("a" to "a1", "c" to "c4"),
+            mapOf("a" to "aZ", "b" to "@@")
+        )
+        Assert.assertEquals(
+            setOf(
+                mapOf("a" to "a1", "b" to "c2", "c" to "c3"),
+                mapOf("a" to "a1", "b" to "c2", "c" to "c4"),
+                mapOf("a" to "aZ", "b" to "@@")
+            ), table1.join(table2, JoinType.RightOuter)
+        )
+    }
+
+    fun when_2MatchAnd2FullOuterJoin_thenExpect_fourResults() {
+        val table1 = setOf(
+            mapOf("a" to "a1", "b" to "c2"),
+            mapOf("a" to "aX", "b" to "**")
+        )
+        val table2 = setOf(
+            mapOf("a" to "a1", "c" to "c3"),
+            mapOf("a" to "a1", "c" to "c4"),
+            mapOf("a" to "aZ", "b" to "@@")
+        )
+        Assert.assertEquals(
+            setOf(
+                mapOf("a" to "a1", "b" to "c2", "c" to "c3"),
+                mapOf("a" to "a1", "b" to "c2", "c" to "c4"),
+                mapOf("a" to "aX", "b" to "**"),
+                mapOf("a" to "aZ", "b" to "@@")
+            ), table1.join(table2, JoinType.FullOuter)
+        )
+    }
 }

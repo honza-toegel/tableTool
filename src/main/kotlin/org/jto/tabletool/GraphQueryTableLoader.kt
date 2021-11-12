@@ -27,7 +27,8 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
     private fun getServerGroup(prefix: String) = joinAll(
         //This is optional relation -> not all Components are listed by edge ServerGroup
         g.findVerticesByEdgeLabel("${prefix}Component", "${prefix}ServerGroup", "deployedOn"),
-        g.findVerticesByEdgeLabel("${prefix}ServerGroup", "${prefix}RestrictedManEnv", "restrictedManEnv")
+        g.findVerticesByEdgeLabel("${prefix}ServerGroup", "${prefix}RestrictedManEnv", "restrictedManEnv"),
+        g.findVerticesByEdgeLabel("${prefix}ServerGroup", "${prefix}Server", "hasServer")
     )
 
     private fun Set<Map<String, Vertex>>.filterOutByRestrictedManEnv(prefix: String): Set<Map<String, Vertex>> =
@@ -43,8 +44,8 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
         logger.info("Execute graph query to extract data..")
 
         val result = getBaseTable()
-            .join(getServerGroup("receiver")).filterOutByRestrictedManEnv("receiver")
-            .join(getServerGroup("sender")).filterOutByRestrictedManEnv("sender")
+            .join(getServerGroup("receiver"), JoinType.LeftOuter).filterOutByRestrictedManEnv("receiver")
+            .join(getServerGroup("sender"), JoinType.LeftOuter).filterOutByRestrictedManEnv("sender")
 
         return result
             .map { row ->
