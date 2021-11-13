@@ -6,19 +6,19 @@ class EdgeContainer<E, V>(val edge: E, val source: V, val target: V)
 
 fun Graph<Vertex, Edge>.findVerticesByEdgeLabel(
     edgeLabel: String
-): Set<Map<String, Vertex>> = findVerticesByEdge{ edge, _, _ -> edge.label == edgeLabel }
+): Set<Map<String, Vertex>> = findVerticesByEdge { edge, _, _ -> edge.label == edgeLabel }
 
 fun Graph<Vertex, Edge>.findVerticesByEdgeLabel(
     sourceLabel: String,
     targetLabel: String,
     edgeLabel: String
-): Set<Map<String, Vertex>> = findVerticesByEdge(sourceLabel, targetLabel) { edge, _, _ -> edge.label == edgeLabel }
+): Table<Vertex> = findVerticesByEdge(sourceLabel, targetLabel) { edge, _, _ -> edge.label == edgeLabel }
 
 fun <E, V> Graph<V, E>.findVerticesByEdge(
     sourceLabel: String,
     targetLabel: String,
     predicate: (edge: E) -> Boolean
-): Set<Map<String, V>> = findVerticesByEdge(sourceLabel, targetLabel) { edge, _, _ -> predicate(edge) }
+): Table<V> = findVerticesByEdge(sourceLabel, targetLabel) { edge, _, _ -> predicate(edge) }
 
 private fun <E, V> Graph<V, E>.filterVerticesByEdgePredicate(
     predicate: (edge: E, source: V, target: V) -> Boolean
@@ -49,11 +49,12 @@ fun <E, V> Graph<V, E>.findVerticesByEdge(
     sourceLabel: String,
     targetLabel: String,
     predicate: (edge: E, source: V, target: V) -> Boolean
-): Set<Map<String, V>> {
-    return filterVerticesByEdgePredicate(predicate)
+): Table<V> = Table(
+    setOf(sourceLabel, targetLabel),
+    filterVerticesByEdgePredicate(predicate)
         .createTableFromVerticesContainerList(sourceLabel, targetLabel)
         .toSet()
-}
+)
 
 fun Graph<Vertex, Edge>.findVerticesByEdge(
     predicate: (edge: Edge, source: Vertex, target: Vertex) -> Boolean

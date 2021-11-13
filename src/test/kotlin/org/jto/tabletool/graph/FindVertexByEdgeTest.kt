@@ -10,7 +10,7 @@ class FindVertexByEdgeTest {
     fun findVertexByEdge_when_hasEmptyGraph_then_expectEmptyResult() {
         val graph = DirectedPseudograph<String, DefaultEdge>(DefaultEdge::class.java)
         Assert.assertEquals(
-            emptySet<Map<String, String>>(),
+            emptyTable<String>(setOf("a", "b")),
             graph.findVerticesByEdge("a", "b") { edge, source, target -> true })
     }
 
@@ -21,7 +21,7 @@ class FindVertexByEdgeTest {
         graph.addVertex("b")
         graph.addEdge("a", "b")
         Assert.assertEquals(
-            emptySet<Map<String, String>>(),
+            emptyTable<String>(setOf("a", "b")),
             graph.findVerticesByEdge("a", "b") { edge, source, target -> false })
     }
 
@@ -32,7 +32,7 @@ class FindVertexByEdgeTest {
         graph.addVertex("b")
         val expectedEdge = graph.addEdge("a", "b")
         Assert.assertEquals(
-            setOf(mapOf("a" to "a", "b" to "b")),
+            Table(setOf("a", "b"), setOf(mapOf("a" to "a", "b" to "b"))),
             graph.findVerticesByEdge(
                 "a",
                 "b"
@@ -51,7 +51,7 @@ class FindVertexByEdgeTest {
         val notExpEdge3 = graph.addEdge("b", "c")
         val notExpEdge4 = graph.addEdge("a", "b")
         Assert.assertEquals(
-            setOf(mapOf("a" to "a", "b" to "b")),
+            Table(setOf("a", "b"), setOf(mapOf("a" to "a", "b" to "b"))),
             graph.findVerticesByEdge(
                 "a",
                 "b"
@@ -70,7 +70,7 @@ class FindVertexByEdgeTest {
         val notExpEdge3 = graph.addEdge("b", "c")
         val expectedEdge2 = graph.addEdge("a", "b")
         Assert.assertEquals(
-            setOf(mapOf("a" to "a", "b" to "b"), mapOf("a" to "a", "b" to "c")),
+            Table(setOf("a", "b"), setOf(mapOf("a" to "a", "b" to "b"), mapOf("a" to "a", "b" to "c"))),
             graph.findVerticesByEdge(
                 "a",
                 "b"
@@ -88,7 +88,7 @@ class FindVertexByEdgeTest {
         val notExpEdge1 = graph.addEdge("b", "a")
         val notExpEdge3 = graph.addEdge("b", "c")
         Assert.assertEquals(
-            setOf(mapOf("a" to "a", "b" to "b"), mapOf("a" to "a", "b" to "c")),
+            Table(setOf("a", "b"), setOf(mapOf("a" to "a", "b" to "b"), mapOf("a" to "a", "b" to "c"))),
             graph.findVerticesByEdge(
                 "a",
                 "b"

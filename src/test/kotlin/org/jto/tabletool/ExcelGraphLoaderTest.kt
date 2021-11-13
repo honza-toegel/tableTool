@@ -5,7 +5,6 @@ import org.jgrapht.graph.DirectedPseudograph
 import org.jto.tabletool.graph.Edge
 import org.jto.tabletool.graph.Vertex
 import org.jto.tabletool.graph.findVerticesByEdge
-import org.jto.tabletool.graph.join
 import org.junit.Assert
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -31,7 +30,7 @@ class ExcelGraphLoaderTest {
         val marriedWith =
             g.findVerticesByEdge("personAFriend", "personAFriendMarriedWith") { edge -> edge.label == "marriedWith" }
 
-        val hasFriendWhoIsMarriedWith = hasFriend.join(marriedWith).map{ r -> r.map { v -> v.key to v.value.name }.toMap() }.toSet()
+        val hasFriendWhoIsMarriedWith = hasFriend.join(marriedWith).data.map{ r -> r.map { v -> v.key to v.value.name }.toMap() }.toSet()
 
         println(hasFriendWhoIsMarriedWith)
 

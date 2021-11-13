@@ -25,19 +25,76 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
     )
 
     private fun getServerGroup(prefix: String) = joinAll(
-        //This is optional relation -> not all Components are listed by edge ServerGroup
         g.findVerticesByEdgeLabel("${prefix}Component", "${prefix}ServerGroup", "deployedOn"),
         g.findVerticesByEdgeLabel("${prefix}ServerGroup", "${prefix}RestrictedManEnv", "restrictedManEnv"),
         g.findVerticesByEdgeLabel("${prefix}ServerGroup", "${prefix}Server", "hasServer")
     )
 
-    private fun Set<Map<String, Vertex>>.filterOutByRestrictedManEnv(prefix: String): Set<Map<String, Vertex>> =
-        filterByTwoColumns(
+    private fun Table<Vertex>.filterOutByRestrictedManEnv(prefix: String): Table<Vertex> =
+        filterNonEqualNames(
             "${prefix}ManEnv",
             "${prefix}RestrictedManEnv"
-        ) { manEnv, restrictedManEnv ->
-            manEnv == null || restrictedManEnv == null || manEnv.name == restrictedManEnv.name
-        }
+        )
+
+    /**
+     * @param sourceLabel can be 'mftType' or 'receiverComponent'
+     * @param sourceVertexLabel in case of sourceLabel='receiverComponent' is 'swComponent'
+     */
+    private fun getPostscript(sourceLabel: String, sourceVertexLabel: String = sourceLabel) = joinAll(
+        JoinType.LeftOuter,
+        g.findVerticesByEdgeLabel(sourceLabel, "postScript", "hasPostScript")
+            .filterByLabel(sourceLabel, sourceVertexLabel),
+        g.findVerticesByEdgeLabel("postScript", "postScriptRestrictReceiverMandator", "restrictMandator")
+            .filterByLabel("postScript"),
+        g.findVerticesByEdgeLabel("postScript", "postScriptRestrictReceiverEnvironment", "restrictEnvironment")
+            .filterByLabel("postScript"),
+        g.findVerticesByEdgeLabel("postScript", "postScriptRestrictReceiverServerGroup", "restrictServerGroup")
+            .filterByLabel("postScript")
+    )
+
+    /**
+     * @param sourceLabel can be 'mftType' or 'receiverComponent'
+     * @param sourceVertexLabel in case of sourceLabel='receiverComponent' is 'swComponent'
+     */
+    private fun getPostscriptParams(sourceLabel: String, sourceVertexLabel: String = sourceLabel) = joinAll(
+        JoinType.LeftOuter,
+        g.findVerticesByEdgeLabel(sourceLabel, "postScriptParams", "hasPostScriptParams")
+            .filterByLabel(sourceLabel, sourceVertexLabel),
+        g.findVerticesByEdgeLabel("postScriptParams", "postScriptParamsRestrictReceiverMandator", "restrictMandator")
+            .filterByLabel("postScriptParams"),
+        g.findVerticesByEdgeLabel("postScriptParams", "postScriptParamsRestrictReceiverEnvironment", "restrictEnvironment")
+            .filterByLabel("postScriptParams"),
+        g.findVerticesByEdgeLabel("postScriptParams", "postScriptParamsRestrictReceiverServerGroup", "restrictServerGroup")
+            .filterByLabel("postScriptParams")
+    )
+
+    /**
+     * @param sourceLabel can be 'mftType' or 'receiverComponent'
+     * @param sourceVertexLabel in case of sourceLabel='receiverComponent' is 'swComponent'
+     */
+    private fun getReceiverDirectory(sourceLabel: String, sourceVertexLabel: String = sourceLabel) = joinAll(
+        JoinType.LeftOuter,
+        g.findVerticesByEdgeLabel(sourceLabel, "postScriptParams", "hasPostScriptParams")
+            .filterByLabel(sourceLabel, sourceVertexLabel),
+        g.findVerticesByEdgeLabel("postScriptParams", "postScriptParamsRestrictReceiverMandator", "restrictMandator")
+            .filterByLabel("postScriptParams"),
+        g.findVerticesByEdgeLabel("postScriptParams", "postScriptParamsRestrictReceiverEnvironment", "restrictEnvironment")
+            .filterByLabel("postScriptParams"),
+        g.findVerticesByEdgeLabel("postScriptParams", "postScriptParamsRestrictReceiverServerGroup", "restrictServerGroup")
+            .filterByLabel("postScriptParams")
+    )
+
+    private fun Table<Vertex>.filterOutByManAndEnvAndServerGroup(prefix: String): Table<Vertex> =
+        filterNonEqualNames(
+            "receiverMandator",
+            "${prefix}RestrictReceiverMandator"
+        ).filterNonEqualNames(
+            "receiverEnvironment",
+            "${prefix}RestrictReceiverEnvironment"
+        ).filterNonEqualNames(
+            "receiverServerGroup",
+            "${prefix}RestrictReceiverServerGroup"
+        )
 
     fun extractData(): Set<Map<String, TableValue>> {
 
@@ -46,13 +103,31 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
         val result = getBaseTable()
             .join(getServerGroup("receiver"), JoinType.LeftOuter).filterOutByRestrictedManEnv("receiver")
             .join(getServerGroup("sender"), JoinType.LeftOuter).filterOutByRestrictedManEnv("sender")
+            //Join postscript on mftType as PRIO-1
+            .join("mftType", getPostscript("mftType"), JoinType.LeftOuter)
+            //Join postscript on mftType as PRIO-2
+            .join(
+                "receiverComponent",
+                getPostscript("receiverComponent", "swComponent"),
+                JoinType.LeftOuter,
+                ignoreRightOnMultipleJoinColumns = true
+            )
+            .filterOutByManAndEnvAndServerGroup("postScript")
+            //Join postscript params on mftType as PRIO-1
+            .join("mftType", getPostscriptParams("mftType"), JoinType.LeftOuter)
+            .join(
+                "receiverComponent",
+                getPostscriptParams("receiverComponent", "swComponent"),
+                JoinType.LeftOuter,
+                ignoreRightOnMultipleJoinColumns = true
+            )
+            .filterOutByManAndEnvAndServerGroup("postScriptParams")
 
-        return result
-            .map { row ->
-                row.map { valEntry ->
-                    valEntry.key to valEntry.value.toTableValue()
-                }.toMap()
-            }.toSet()
+        return result.data.map { row ->
+            row.map { valEntry ->
+                valEntry.key to valEntry.value.toTableValue()
+            }.toMap()
+        }.toSet()
     }
 
     private fun Vertex.toTableValue(): TableValue =
