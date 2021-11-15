@@ -1,68 +1,51 @@
 package org.jto.tabletool
 
-import kotlinx.cli.*
 import org.jgrapht.Graph
 import org.jgrapht.graph.DirectedPseudograph
 import org.jto.tabletool.graph.Edge
 import org.jto.tabletool.graph.Vertex
 import org.slf4j.LoggerFactory
+import picocli.CommandLine
+import picocli.CommandLine.Command
+import picocli.CommandLine.Option
 import java.io.FileOutputStream
+import kotlin.system.exitProcess
 
-class CompareCommand : Subcommand("compare", "Compare two data tables (left <> right) and  ") {
+
+@Command(name = "extract", description = ["Compare two data tables (left <> right) and  "])
+class CompareCommand: Runnable {
 
     val logger = LoggerFactory.getLogger("Main")
 
-    val leftInputType by option(
-        ArgType.Choice<InputType>(),
-        shortName = "lt",
-        description = "Type of the left input \nTable is the simple excel file with ~sheets containing table data\nGraph definition is excel file containing graph definition which can be loaded, and given graph query is executed to extract data table"
-    ).default(InputType.GraphDefinitionFile)
-    val leftInputFile by option(
-        ArgType.String,
-        shortName = "lf",
-        description = "Left input file for the given input type"
-    ).required()
+    @Option(names = ["-lt", "--left-input-type"], required = false, description = ["Type of the left input \nTable is the simple excel file with ~sheets containing table data\nGraph definition is excel file containing graph definition which can be loaded, and given graph query is executed to extract data table"])
+    var leftInputType: InputType = InputType.GraphDefinitionFile
 
-    val rightInputType by option(
-        ArgType.Choice<InputType>(),
-        shortName = "rt",
-        description = "Type of the right input \nTable is the simple excel file with ~sheets containing table data\nGraph definition is excel file containing graph definition which can be loaded, and given graph query is executed to extract data table"
-    ).default(InputType.Table)
-    val rightInputFile by option(
-        ArgType.String,
-        shortName = "rf",
-        description = "Left input file for the given input type"
-    ).required()
+    @Option(names = ["-lf", "--left-input-file"], required = true, description = ["Left input file for the given input type"])
+    var leftInputFile: String = ""
 
-    val outputFile by option(
-        ArgType.String,
-        shortName = "of",
-        description = "Output file where will be the compare result stored"
-    ).required()
+    @Option(names = ["-rt", "--left-input-file"], required = false, description = ["Type of the right input \n" +
+            "Table is the simple excel file with ~sheets containing table data\n" +
+            "Graph definition is excel file containing graph definition which can be loaded, and given graph query is executed to extract data table"])
+    var rightInputType: InputType= InputType.Table
 
-    val minimumComparableScore by option(
-        ArgType.Double,
-        shortName = "ms",
-        description = "Minimum diff score to asses results as equal"
-    ).default(1.0)
-    val groupByField by option(
-        ArgType.String,
-        shortName = "gf",
-        description = "Group results by field"
-    ).default("mftType")
-    val outputColumns by option(
-        ArgType.String,
-        shortName = "oc",
-        description = "Column list which would be reported, in exact order, by default () "
-    )
-        .default(
+    @Option(names = ["-rf", "--right-input-file"], required = true, description = ["Right input file for the given input type"])
+    var rightInputFile: String = ""
+
+    @Option(names = ["-of", "--output-file"], required = true, description = ["Output file where will be the compare result stored"])
+    var outputFile: String = ""
+
+    @Option(names = ["-ms"], required = false, description = ["Minimum diff score to asses results as equal"])
+    var minimumComparableScore : Double = 1.0
+
+    val groupByField :String = "mftType"
+
+    @Option(names = ["-oc"], required = false, description = ["Column list which would be reported, in exact order and format (colNameFromGraph:colNameTobeReported;..)"])
+    var outputColumns :String =
             "id:Id:ib;mftService:Service Name;mftType:ASI File Type;senderServer:Supplier Host;receiverServer:Receiver Host;senderServerGroup:Supplier HostGroup:i;receiverServerGroup:Receiver HostGroup:i;postScript:Postprocessing Command;" +
                     "postScriptParams:Postprocessing Arguments;receiverDirectory:Receiver Directory;senderUID:Supplier UID;receiverUID:Receiver UID;senderMandator:SUMAN;senderEnvironment:SURTE;receiverMandator:DEMAN;receiverEnvironment:DERTE;" +
                     "instance:Instance;validFrom:Valid From;validTo:Valid To;state:State"
-        )
 
-    override fun execute() {
-
+    override fun run() {
         val outputHeaderColumns =
             outputColumns.split(';').map {
                 val parsedColumn = requireNotNull(
@@ -123,4 +106,9 @@ class CompareCommand : Subcommand("compare", "Compare two data tables (left <> r
             }.mapIndexed { rowIndex, row -> row + ("id" to StringTableValue("$rowIndex")) }.toSet()
         }
     }
+}
+
+fun main(args: Array<String>) {
+    val exitCode: Int = CommandLine(CompareCommand()).execute(*args)
+    exitProcess(exitCode)
 }
