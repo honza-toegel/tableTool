@@ -101,8 +101,9 @@ dependencies {
 
     implementation( "org.jetbrains.kotlinx:kotlinx-cli:0.3" )
 
-    // Tinkerpop - Core
-    implementation("org.apache.tinkerpop:tinkergraph-gremlin:3.4.7")
+    // https://mvnrepository.com/artifact/org.jgrapht/jgrapht-core
+    implementation("org.jgrapht:jgrapht-core:1.4.0")
+
     //Apache poi for excel files
     implementation(  "org.apache.poi:poi-ooxml:4.1.2")
     //Google Diff

@@ -1,9 +1,10 @@
 package org.jto.tabletool
 
 import kotlinx.cli.*
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
-import org.apache.tinkerpop.gremlin.structure.Graph
-import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph
+import org.jgrapht.Graph
+import org.jgrapht.graph.DirectedPseudograph
+import org.jto.tabletool.graph.Edge
+import org.jto.tabletool.graph.Vertex
 import org.slf4j.LoggerFactory
 import java.io.FileOutputStream
 
@@ -110,8 +111,7 @@ class CompareCommand : Subcommand("compare", "Compare two data tables (left <> r
         fun loadInputTable(inputType: InputType, inputFile: String): Set<Map<String, TableValue>> {
             return when (inputType) {
                 InputType.GraphDefinitionFile -> {
-                    val graph: Graph = TinkerGraph.open()
-                    val g: GraphTraversalSource = graph.traversal()
+                    val g: Graph<Vertex, Edge> = DirectedPseudograph(Edge::class.java)
                     //Load graph from excel
                     ExcelGraphLoader(inputFile, g).loadGraph()
                     //Extract data out of graph (can be replaced by groovy to have configurable query)
