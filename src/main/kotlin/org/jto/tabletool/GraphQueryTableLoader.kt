@@ -24,7 +24,7 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
         g.findVerticesByEdgeLabel("mftType", "receiverComponent", "hasReceiverComponent")
     )
 
-    private fun getServerGroup(prefix: String) = joinAll(
+    private fun getServers(prefix: String) = joinAll(
         g.findVerticesByEdgeLabel("${prefix}Component", "${prefix}ServerGroup", "deployedOn"),
         g.findVerticesByEdgeLabel("${prefix}ServerGroup", "${prefix}RestrictedManEnv", "restrictedManEnv"),
         g.findVerticesByEdgeLabel("${prefix}ServerGroup", "${prefix}Server", "hasServer")
@@ -74,14 +74,14 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
      */
     private fun getReceiverDirectory(sourceLabel: String, sourceVertexLabel: String = sourceLabel) = joinAll(
         JoinType.LeftOuter,
-        g.findVerticesByEdgeLabel(sourceLabel, "postScriptParams", "hasPostScriptParams")
+        g.findVerticesByEdgeLabel(sourceLabel, "receiverDirectory", "hasReceiverDirectory")
             .filterByLabel(sourceLabel, sourceVertexLabel),
-        g.findVerticesByEdgeLabel("postScriptParams", "postScriptParamsRestrictReceiverMandator", "restrictMandator")
-            .filterByLabel("postScriptParams"),
-        g.findVerticesByEdgeLabel("postScriptParams", "postScriptParamsRestrictReceiverEnvironment", "restrictEnvironment")
-            .filterByLabel("postScriptParams"),
-        g.findVerticesByEdgeLabel("postScriptParams", "postScriptParamsRestrictReceiverServerGroup", "restrictServerGroup")
-            .filterByLabel("postScriptParams")
+        g.findVerticesByEdgeLabel("receiverDirectory", "receiverDirectoryRestrictReceiverMandator", "restrictMandator")
+            .filterByLabel("receiverDirectory"),
+        g.findVerticesByEdgeLabel("receiverDirectory", "receiverDirectoryRestrictReceiverEnvironment", "restrictEnvironment")
+            .filterByLabel("receiverDirectory"),
+        g.findVerticesByEdgeLabel("receiverDirectory", "receiverDirectoryRestrictReceiverServerGroup", "restrictServerGroup")
+            .filterByLabel("receiverDirectory")
     )
 
     private fun Table<Vertex>.filterOutByManAndEnvAndServerGroup(prefix: String): Table<Vertex> =
@@ -96,13 +96,28 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
             "${prefix}RestrictReceiverServerGroup"
         )
 
+    /**
+     * @param uidPrefix 'sender' or 'receiver'
+     */
+    private fun getUID(uidPrefix: String) = joinAll(
+        JoinType.LeftOuter,
+        g.findVerticesByEdgeLabel("${uidPrefix}Component", "${uidPrefix}UID", "hasUID")
+            .filterByLabel("${uidPrefix}Component", "swComponent"),
+        g.findVerticesByEdgeLabel("${uidPrefix}UID", "${uidPrefix}UIDRestrictReceiverMandator", "restrictMandator")
+            .filterByLabel("${uidPrefix}UID", "UID"),
+        g.findVerticesByEdgeLabel("${uidPrefix}UID", "${uidPrefix}UIDRestrictReceiverEnvironment", "restrictEnvironment")
+            .filterByLabel("${uidPrefix}UID", "UID"),
+        g.findVerticesByEdgeLabel("${uidPrefix}UID", "${uidPrefix}UIDRestrictReceiverServerGroup", "restrictServerGroup")
+            .filterByLabel("${uidPrefix}UID", "UID")
+    )
+
     fun extractData(): Set<Map<String, TableValue>> {
 
         logger.info("Execute graph query to extract data..")
 
         val result = getBaseTable()
-            .join(getServerGroup("receiver"), JoinType.LeftOuter).filterOutByRestrictedManEnv("receiver")
-            .join(getServerGroup("sender"), JoinType.LeftOuter).filterOutByRestrictedManEnv("sender")
+            .join(getServers("receiver"), JoinType.LeftOuter).filterOutByRestrictedManEnv("receiver")
+            .join(getServers("sender"), JoinType.LeftOuter).filterOutByRestrictedManEnv("sender")
             //Join postscript on mftType as PRIO-1
             .join("mftType", getPostscript("mftType"), JoinType.LeftOuter)
             //Join postscript on mftType as PRIO-2
@@ -115,6 +130,7 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
             .filterOutByManAndEnvAndServerGroup("postScript")
             //Join postscript params on mftType as PRIO-1
             .join("mftType", getPostscriptParams("mftType"), JoinType.LeftOuter)
+            //Join postscript params on mftType as PRIO-2
             .join(
                 "receiverComponent",
                 getPostscriptParams("receiverComponent", "swComponent"),
@@ -122,6 +138,22 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
                 ignoreRightOnMultipleJoinColumns = true
             )
             .filterOutByManAndEnvAndServerGroup("postScriptParams")
+            //Join receiver directory on mftType as PRIO-1
+            .join("mftType", getReceiverDirectory("mftType"), JoinType.LeftOuter)
+            //Join receiver directory on mftType as PRIO-2
+            .join(
+                "receiverComponent",
+                getReceiverDirectory("receiverComponent", "swComponent"),
+                JoinType.LeftOuter,
+                ignoreRightOnMultipleJoinColumns = true
+            )
+            .filterOutByManAndEnvAndServerGroup("receiverDirectory")
+            //Add receiver UID
+            .join("receiverComponent", getUID("receiver"), JoinType.LeftOuter)
+            .filterOutByManAndEnvAndServerGroup("receiverUID")
+            //Add sender UID
+            .join("senderComponent", getUID("sender"), JoinType.LeftOuter)
+            .filterOutByManAndEnvAndServerGroup("senderUID")
 
         return result.data.map { row ->
             row.map { valEntry ->
