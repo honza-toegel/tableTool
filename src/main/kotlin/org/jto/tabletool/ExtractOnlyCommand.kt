@@ -22,9 +22,34 @@ class ExtractOnlyCommand : Runnable {
 
     @Option(names = ["-oc"], required = false, description = ["Column list which would be reported, in exact order and format (colNameFromGraph:colNameTobeReported;..)"])
     var outputColumns :String =
-        "id:Id:i;mftService:Service Name;mftType:ASI File Type;senderServer:Supplier Host;receiverServer:Receiver Host;senderServerGroup:Supplier HostGroup:i;receiverServerGroup:Receiver HostGroup:i;postScript:Postprocessing Command;" +
-                "postScriptParams:Postprocessing Arguments;receiverDirectory:Receiver Directory;senderUID:Supplier UID;receiverUID:Receiver UID;senderMandator:SUMAN;senderEnvironment:SURTE;receiverMandator:DEMAN;receiverEnvironment:DERTE;" +
-                "instance:Instance;validFrom:Valid From;validTo:Valid To;state:State"
+        "id:Id:i;mftService:Service Dir;instance:Instance;mftType:File Type;_senderServerGroup:Supplier HostGroup:i;_receiverServerGroup:Consumer HostGroup:i;" +
+                "_senderServer:Supplier Host;_senderUID:Supplier User;" +
+                "senderServer:Supplier Host NEW;senderUID:Supplier User NEW;" +
+                "_senderMandator:SUMAN;_senderEnvironment:SURTE;" +
+                "senderMandator:SUMAN NEW;senderEnvironment:SURTE NEW;" +
+                "_receiverServer:Consumer Host;_receiverUID:Receiver User;" +
+                "receiverServer:Consumer Host NEW;receiverUID:Receiver User NEW;" +
+                "_receiverMandator:DEMAN;_receiverEnvironment:DERTE;" +
+                "receiverMandator:DEMAN NEW;receiverEnvironment:DERTE NEW;" +
+                "transferType:Transfer Type;" +
+                "_postScript:Postprocessing Command;_postScriptParams:Postprocessing Arguments;_receiverDirectory:Destination Directory;" +
+                "postScript:Postprocessing Command NEW;postScriptParams:Postprocessing Arguments NEW;receiverDirectory:Destination Directory NEW;" +
+                "validFrom:Valid From;uid:Unique ID;split:Split"
+
+    /*
+    Nr,Service Dir,Instance,File Type,Supplier HostGroup,Consumer HostGroup,Supplier Host,Supplier User,
+    Supplier Host NEW,Supplier User NEW,
+    SUMAN,SURTE,
+    SUMAN NEW,SURTE NEW, -
+    Consumer Host,Consumer User,
+    Consumer Host NEW,Consumer User NEW,
+    DEMAN,DERTE,
+    DEMAN NEW,DERTE NEW,
+    Transfer Type,
+    Postprocessing Command,Postprocessing Arguments,Destination Directory,
+    Postprocessing Command NEW,Postprocessing Arguments NEW,Destination Directory NEW,
+    Valid From,Unique ID,Split
+     */
 
 
     override fun run() {

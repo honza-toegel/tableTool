@@ -35,16 +35,16 @@ class ExcelGraphLoader(
             val rgbColor = (vertexCell.cellStyle.fillBackgroundColorColor as XSSFColor).argbHex
             require(rgbColor == (edgeCell.cellStyle.fillBackgroundColorColor as XSSFColor).argbHex)
             { "The header cell in row 1 must have same collor as header cell in row 2, to express consistent function" }
-            return when (rgbColor.substring(2)) {
-                "FFE599" -> CellColorRelationType.InRelation
-                "A4C2F4" -> CellColorRelationType.Main
-                "F4CCCC" -> CellColorRelationType.OutRelation
+            return when (rgbColor) {
+                "FFFFE599" -> CellColorRelationType.InRelation
+                "FFA4C2F4" -> CellColorRelationType.Main
+                "FFF4CCCC" -> CellColorRelationType.OutRelation
                 else -> error("Not allowed header color ${rgbColor}, allowed FFE599 (In), A4C2F4 (Main), F4CCCC (Out)")
             }
         }
 
         val vertexHeaderRow =
-            requireNotNull(sheet.getRow(0)) { "The first header row is mandatory, cant be empty, sheet:${sheet.sheetName}" }
+            requireNotNull(sheet.getRow(0)) { "The first header row is mandatory, cant be empty, sheet:${sheet.sheetName}" }.filter { it.getCellStringValue().isNotBlank() }
         val edgeHeaderRow =
             requireNotNull(sheet.getRow(1)) { "The second header row is mandatory, cant be empty, sheet:${sheet.sheetName}" }
 
