@@ -22,13 +22,13 @@ class ExtractOnlyCommand : Runnable {
 
     @Option(names = ["-oc"], required = false, description = ["Column list which would be reported, in exact order and format (colNameFromGraph:colNameTobeReported;..)"])
     var outputColumns :String =
-        "id:Id:i;mftService:Service Dir;instance:Instance;mftType:File Type;_senderServerGroup:Supplier HostGroup:i;_receiverServerGroup:Consumer HostGroup:i;" +
+        "id:Nr:i;mftService:Service Dir;instance:Instance;mftType:File Type;_senderServerGroup:Supplier HostGroup:i;_receiverServerGroup:Consumer HostGroup:i;" +
                 "_senderServer:Supplier Host;_senderUID:Supplier User;" +
                 "senderServer:Supplier Host NEW;senderUID:Supplier User NEW;" +
                 "_senderMandator:SUMAN;_senderEnvironment:SURTE;" +
                 "senderMandator:SUMAN NEW;senderEnvironment:SURTE NEW;" +
-                "_receiverServer:Consumer Host;_receiverUID:Receiver User;" +
-                "receiverServer:Consumer Host NEW;receiverUID:Receiver User NEW;" +
+                "_receiverServer:Consumer Host;_receiverUID:Consumer User;" +
+                "receiverServer:Consumer Host NEW;receiverUID:Consumer User NEW;" +
                 "_receiverMandator:DEMAN;_receiverEnvironment:DERTE;" +
                 "receiverMandator:DEMAN NEW;receiverEnvironment:DERTE NEW;" +
                 "transferType:Transfer Type;" +
