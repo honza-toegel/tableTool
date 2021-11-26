@@ -34,7 +34,7 @@ class ExtractOnlyCommand : Runnable {
                 "transferType:Transfer Type;" +
                 "_postScript:Postprocessing Command;_postScriptParams:Postprocessing Arguments;_receiverDirectory:Destination Directory;" +
                 "postScript:Postprocessing Command NEW;postScriptParams:Postprocessing Arguments NEW;receiverDirectory:Destination Directory NEW;" +
-                "validFrom:Valid From;uid:Unique ID;split:Split"
+                "validFrom:Valid From;uid:Unique ID;split:Split;comment:Comment"
 
     /*
     Nr,Service Dir,Instance,File Type,Supplier HostGroup,Consumer HostGroup,Supplier Host,Supplier User,

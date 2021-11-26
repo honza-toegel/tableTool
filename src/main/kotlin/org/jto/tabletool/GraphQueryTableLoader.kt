@@ -24,7 +24,7 @@ class GraphQueryTableLoader(val g: Graph<Vertex, Edge>) {
         g.findVerticesByEdgeLabel("mftType", "receiverComponent", "hasReceiverComponent"),
         g.findVerticesByEdgeLabel("mftType", "mftService", "hasMftService"),
         g.findVerticesByEdgeLabel("mftType", "transferType", "hasTransferType")
-    )
+    ).join(g.findVerticesByEdgeLabel("mftType", "comment", "hasComment"), JoinType.LeftOuter)
 
     private fun getServers(prefix: String) = joinAll(
         g.findVerticesByEdgeLabel("${prefix}Component", "${prefix}ServerGroup", "deployedOn"),
